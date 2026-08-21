@@ -16,7 +16,8 @@ Live outputs: [`aws-asm3-outputs.json`](aws-asm3-outputs.json)
 | RDS PostgreSQL | `aws-asm3-postgres` | DB (3) |
 | Lambda | `aws-asm3-api`, `aws-asm3-outbox-worker` | Compute (6) |
 | API Gateway HTTP | `aws-asm3-http-api` → `https://d5i11y0jd8.execute-api.us-east-1.amazonaws.com` | Edge (6) |
-| Elastic Beanstalk | app `aws-asm3-donation-ui` / env `aws-asm3-ui-env` | UI (6) |
+| Elastic Beanstalk | app `aws-asm3-donor-ui` / env `aws-asm3-donor-env` | Donor UI (6) |
+| Elastic Beanstalk | app `aws-asm3-admin-ui` / env `aws-asm3-admin-env` | Admin UI (6) |
 | Athena | workgroup `aws-asm3-analytics` | Analytics (3) |
 | Glue | DB `aws_asm3_donation` | Athena catalog |
 
@@ -50,20 +51,35 @@ Add repo secrets (refresh when Learner Lab restarts):
 | `AWS_ACCESS_KEY_ID` | Learner Lab AWS Details |
 | `AWS_SECRET_ACCESS_KEY` | Learner Lab |
 | `AWS_SESSION_TOKEN` | Learner Lab |
+| `AWS_ASM3_DB_PASSWORD` | `%USERPROFILE%\.aws\aws-asm3-db-password.txt` |
 
 On push to `main` / `master` / `donation-implementation` (or **Run workflow**):
 
 1. Resolves `aws-asm3-*` resources by name  
 2. Builds .NET solution  
-3. Publishes Admin UI → S3 deploy bucket → Elastic Beanstalk  
+3. Publishes **Donor UI** and **Admin UI** to separate Beanstalk apps  
 4. Updates Lambda zip + env (`RECEIPTS_BUCKET`, `RDS_ENDPOINT`, `GIT_SHA`)
 
 ## Smoke checks
 
 ```powershell
-curl https://d5i11y0jd8.execute-api.us-east-1.amazonaws.com/
-# EB (Grey until first real app version succeeds):
-# http://aws-asm3-ui-env.eba-mrhkizyq.us-east-1.elasticbeanstalk.com
+curl https://d5i11y0jd8.execute-api.us-east-1.amazonaws.com/health
+curl "https://d5i11y0jd8.execute-api.us-east-1.amazonaws.com/api/v1/contacts?`$top=2"
+# Donor / Admin CNAMEs: see aws-asm3-outputs.json (ebDonorCname / ebAdminCname)
+```
+
+## Migrate / seed RDS
+
+```powershell
+$pwd = (Get-Content "$env:USERPROFILE\.aws\aws-asm3-db-password.txt" -Raw).Trim()
+$env:Database__ApplicationConnectionString = "Host=aws-asm3-postgres.c8eabaw8smvd.us-east-1.rds.amazonaws.com;Port=5432;Database=donation;Username=donationadmin;Password=$pwd;SSL Mode=Require;Trust Server Certificate=true"
+$env:Database__Provider = "postgresql"
+$env:Database__MigrationsAssembly = "NetCore.Donation.Infrastructure.Database"
+$env:ObjectStorage__BucketName = "aws-asm3-receipts-026652000073"
+$env:ObjectStorage__Region = "us-east-1"
+$env:SEED_DONATION_COUNT = "100"   # default local seed is 5000
+cd src
+dotnet run --project client\NetCore.Donation.Migration --no-launch-profile -c Release -- -m -s
 ```
 
 ## Next app wiring
@@ -72,14 +88,14 @@ curl https://d5i11y0jd8.execute-api.us-east-1.amazonaws.com/
 - RDS connection string + run Migration.
 - Real S3 bucket name (drop MinIO ServiceUrl).
 - Replace Python Lambda shim with .NET API package when ready.
-- Deploy donor UI as a second EB env or combine sites.
 
 ## Files
 
 | File | Purpose |
 |---|---|
 | `provision-aws-asm3.ps1` | Create/update tagged resources via CLI |
-| `eb-option-settings.json` | Beanstalk VPC/instance settings |
+| `eb-option-settings.json` | Beanstalk VPC/instance settings (shared by donor + admin) |
+| `create-dual-eb.ps1` | Ensure separate donor/admin EB apps/envs |
 | `resource-group.json` | Tag-based resource group |
 | `aws-asm3-stack.yaml` | Optional CloudFormation (Academy early-validation can fail; CLI path is canonical) |
 | `deploy-aws-asm3.yml` | GitHub Actions deploy |

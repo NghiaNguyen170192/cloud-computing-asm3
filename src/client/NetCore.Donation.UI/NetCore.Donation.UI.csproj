@@ -20,4 +20,9 @@
 		<ProjectReference Include="..\..\NetCore.Donation.ServiceDefaults\NetCore.Donation.ServiceDefaults.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<Content Update="Properties\launchSettings.json" CopyToPublishDirectory="Never" />
+		<None Include="Procfile" CopyToPublishDirectory="PreserveNewest" />
+	</ItemGroup>
+
 </Project>

@@ -9,9 +9,12 @@
   "httpApiUrl": "https://d5i11y0jd8.execute-api.us-east-1.amazonaws.com",
   "apiFunction": "aws-asm3-api",
   "outboxFunction": "aws-asm3-outbox-worker",
-  "ebApplication": "aws-asm3-donation-ui",
-  "ebEnvironment": "aws-asm3-ui-env",
-  "ebCname": "aws-asm3-ui-env.eba-mrhkizyq.us-east-1.elasticbeanstalk.com",
+  "ebDonorApplication": "aws-asm3-donor-ui",
+  "ebDonorEnvironment": "aws-asm3-donor-env",
+  "ebDonorCname": "aws-asm3-donor-env.eba-j8gubwt9.us-east-1.elasticbeanstalk.com",
+  "ebAdminApplication": "aws-asm3-admin-ui",
+  "ebAdminEnvironment": "aws-asm3-admin-env",
+  "ebAdminCname": "aws-asm3-admin-env.eba-8jbzwqeh.us-east-1.elasticbeanstalk.com",
   "rdsInstanceId": "aws-asm3-postgres",
   "rdsEndpoint": "aws-asm3-postgres.c8eabaw8smvd.us-east-1.rds.amazonaws.com",
   "glueDatabase": "aws_asm3_donation",
@@ -20,6 +23,7 @@
   "githubSecrets": [
     "AWS_ACCESS_KEY_ID",
     "AWS_SECRET_ACCESS_KEY",
-    "AWS_SESSION_TOKEN"
+    "AWS_SESSION_TOKEN",
+    "AWS_ASM3_DB_PASSWORD"
   ]
 }

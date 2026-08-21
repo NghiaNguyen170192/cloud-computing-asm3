@@ -94,6 +94,7 @@
 
   <ItemGroup Label="AWS">
     <PackageVersion Include="AWSSDK.S3" Version="3.7.416.12" />
+    <PackageVersion Include="Amazon.Lambda.AspNetCoreServer.Hosting" Version="1.9.0" />
   </ItemGroup>
 
   <ItemGroup Label="Code Analysis">

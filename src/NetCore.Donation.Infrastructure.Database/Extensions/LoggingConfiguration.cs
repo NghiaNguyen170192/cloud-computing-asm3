@@ -34,6 +34,11 @@ public static class LoggingConfiguration
 				{
 					var logLevel = hostBuilderContext.Configuration.GetValue<LogEventLevel>("Logging:LogLevel:Default");
 					var logFileDirectory = hostBuilderContext.Configuration.GetValue<string>("Logging:Path");
+					if (string.IsNullOrWhiteSpace(logFileDirectory))
+					{
+						logFileDirectory = Path.Combine(Path.GetTempPath(), "logs");
+					}
+
 					var logFileName = $"{DateTime.Now:yyyy-MM-dd}.log";
 					var logFilePath = Path.Combine(logFileDirectory, applicationName, logFileName);
 

@@ -193,54 +193,65 @@ aws lambda add-permission `
 
 $HttpApiUrl = "https://${apiId}.execute-api.${Region}.amazonaws.com"
 
-# --- Elastic Beanstalk ---
-$ebApp = "$Prefix-donation-ui"
-$ebEnv = "$Prefix-ui-env"
-$apps = aws elasticbeanstalk describe-applications --application-names $ebApp --query "Applications[0].ApplicationName" --output text --region $Region 2>$null
-if (-not $apps -or $apps -eq "None") {
-  Write-Host "Creating EB application"
-  aws elasticbeanstalk create-application --application-name $ebApp --description "aws-asm3 Blazor UI" --tags "Key=Project,Value=aws-asm3" "Key=Name,Value=$ebApp" --region $Region | Out-Null
-}
+# --- Elastic Beanstalk (separate donor + admin) ---
+$donorApp = "$Prefix-donor-ui"
+$donorEnv = "$Prefix-donor-env"
+$adminApp = "$Prefix-admin-ui"
+$adminEnv = "$Prefix-admin-env"
 
-# Sample app version so env can launch
 $sampleKey = "beanstalk/sample-app.zip"
-# minimal zip: Procfile-less placeholder - use AWS sample by creating empty web
 $sampleDir = Join-Path $env:TEMP "aws-asm3-eb-sample"
 New-Item -ItemType Directory -Force -Path $sampleDir | Out-Null
 "OK aws-asm3" | Set-Content (Join-Path $sampleDir "health.html") -Encoding ascii
 $sampleZip = Join-Path $env:TEMP "aws-asm3-eb-sample.zip"
 if (Test-Path $sampleZip) { Remove-Item $sampleZip -Force }
-Compress-Archive -Path (Join-Path $sampleDir "*") -DestinationPath $sampleZip -Force
+# Prefer python zip with forward slashes (Windows Compress-Archive breaks EB unzip)
+python -c "import zipfile,pathlib; z=zipfile.ZipFile(r'$sampleZip', 'w'); p=pathlib.Path(r'$sampleDir')/'health.html'; z.write(p, 'health.html'); z.close()"
 aws s3 cp $sampleZip "s3://$DeployBucket/$sampleKey" --region $Region | Out-Null
-aws elasticbeanstalk create-application-version `
-  --application-name $ebApp `
-  --version-label "bootstrap-1" `
-  --source-bundle "S3Bucket=$DeployBucket,S3Key=$sampleKey" `
-  --region $Region 2>$null | Out-Null
 
-$envs = aws elasticbeanstalk describe-environments --application-name $ebApp --environment-names $ebEnv --query "Environments[0].Status" --output text --region $Region 2>$null
-if (-not $envs -or $envs -eq "None") {
-  Write-Host "Creating EB environment $ebEnv (5-10 min)..."
-  aws elasticbeanstalk create-environment `
-    --application-name $ebApp `
-    --environment-name $ebEnv `
-    --solution-stack-name "64bit Amazon Linux 2023 v3.11.6 running .NET 10" `
+foreach ($pair in @(
+  @{ App = $donorApp; Env = $donorEnv; Desc = "Hope and Help donor Blazor UI" },
+  @{ App = $adminApp; Env = $adminEnv; Desc = "Donation admin Blazor UI" }
+)) {
+  $apps = aws elasticbeanstalk describe-applications --application-names $pair.App --query "Applications[0].ApplicationName" --output text --region $Region 2>$null
+  if (-not $apps -or $apps -eq "None") {
+    Write-Host "Creating EB application $($pair.App)"
+    aws elasticbeanstalk create-application --application-name $pair.App --description $pair.Desc --tags "Key=Project,Value=aws-asm3" "Key=Name,Value=$($pair.App)" --region $Region | Out-Null
+  }
+
+  aws elasticbeanstalk create-application-version `
+    --application-name $pair.App `
     --version-label "bootstrap-1" `
-    --option-settings `
-      "Namespace=aws:autoscaling:launchconfiguration,OptionName=IamInstanceProfile,Value=$LabInstanceProfile" `
-      "Namespace=aws:autoscaling:launchconfiguration,OptionName=InstanceType,Value=t3.small" `
-      "Namespace=aws:autoscaling:launchconfiguration,OptionName=SecurityGroups,Value=$EbSg" `
-      "Namespace=aws:elasticbeanstalk:environment,OptionName=EnvironmentType,Value=SingleInstance" `
-      "Namespace=aws:elasticbeanstalk:environment,OptionName=ServiceRole,Value=LabRole" `
-      "Namespace=aws:ec2:vpc,OptionName=VPCId,Value=$VpcId" `
-      "Namespace=aws:ec2:vpc,OptionName=Subnets,Value=$([string]::Join(',', $Subnets))" `
-      "Namespace=aws:elasticbeanstalk:application:environment,OptionName=PROJECT,Value=aws-asm3" `
-      "Namespace=aws:elasticbeanstalk:application:environment,OptionName=ObjectStorage__BucketName,Value=$ReceiptsBucket" `
-      "Namespace=aws:elasticbeanstalk:application:environment,OptionName=DonationApi__BaseUrl,Value=$HttpApiUrl" `
-    --tags "Key=Project,Value=aws-asm3" "Key=Name,Value=$ebEnv" "Key=Assignment,Value=COSC29800-A3" `
-    --region $Region | Out-Null
-} else {
-  Write-Host "EB env status: $envs"
+    --source-bundle "S3Bucket=$DeployBucket,S3Key=$sampleKey" `
+    --region $Region 2>$null | Out-Null
+
+  $envs = aws elasticbeanstalk describe-environments --application-name $pair.App --environment-names $pair.Env --query "Environments[0].Status" --output text --region $Region 2>$null
+  if (-not $envs -or $envs -eq "None" -or $envs -eq "Terminated") {
+    Write-Host "Creating EB environment $($pair.Env) (5-10 min)..."
+    aws elasticbeanstalk create-environment `
+      --application-name $pair.App `
+      --environment-name $pair.Env `
+      --solution-stack-name "64bit Amazon Linux 2023 v3.11.6 running .NET 10" `
+      --version-label "bootstrap-1" `
+      --option-settings `
+        "Namespace=aws:autoscaling:launchconfiguration,OptionName=IamInstanceProfile,Value=$LabInstanceProfile" `
+        "Namespace=aws:autoscaling:launchconfiguration,OptionName=InstanceType,Value=t3.small" `
+        "Namespace=aws:autoscaling:launchconfiguration,OptionName=SecurityGroups,Value=$EbSg" `
+        "Namespace=aws:elasticbeanstalk:environment,OptionName=EnvironmentType,Value=SingleInstance" `
+        "Namespace=aws:elasticbeanstalk:environment,OptionName=ServiceRole,Value=LabRole" `
+        "Namespace=aws:ec2:vpc,OptionName=VPCId,Value=$VpcId" `
+        "Namespace=aws:ec2:vpc,OptionName=Subnets,Value=$([string]::Join(',', $Subnets))" `
+        "Namespace=aws:elasticbeanstalk:application:environment,OptionName=ASPNETCORE_ENVIRONMENT,Value=Production" `
+        "Namespace=aws:elasticbeanstalk:application:environment,OptionName=ASPNETCORE_URLS,Value=http://127.0.0.1:5000" `
+        "Namespace=aws:elasticbeanstalk:application:environment,OptionName=PROJECT,Value=aws-asm3" `
+        "Namespace=aws:elasticbeanstalk:application:environment,OptionName=ObjectStorage__BucketName,Value=$ReceiptsBucket" `
+        "Namespace=aws:elasticbeanstalk:application:environment,OptionName=DonationApi__BaseUrl,Value=$HttpApiUrl" `
+        "Namespace=aws:elasticbeanstalk:application:environment,OptionName=ApiBaseAddress,Value=$HttpApiUrl" `
+      --tags "Key=Project,Value=aws-asm3" "Key=Name,Value=$($pair.Env)" "Key=Assignment,Value=COSC29800-A3" `
+      --region $Region | Out-Null
+  } else {
+    Write-Host "EB env $($pair.Env) status: $envs"
+  }
 }
 
 # --- Athena + Glue ---
@@ -273,8 +284,10 @@ $out = [ordered]@{
   httpApiUrl        = $HttpApiUrl
   apiFunction       = "$Prefix-api"
   outboxFunction    = "$Prefix-outbox-worker"
-  ebApplication     = $ebApp
-  ebEnvironment     = $ebEnv
+  ebDonorApplication = $donorApp
+  ebDonorEnvironment = $donorEnv
+  ebAdminApplication = $adminApp
+  ebAdminEnvironment = $adminEnv
   rdsInstanceId     = $dbId
   glueDatabase      = $glueDb
   athenaWorkGroup   = "$Prefix-analytics"

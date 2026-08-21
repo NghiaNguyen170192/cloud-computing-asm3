@@ -36,8 +36,23 @@
   },
   {
     "Namespace": "aws:elasticbeanstalk:application:environment",
-    "OptionName": "PROJECT",
-    "Value": "aws-asm3"
+    "OptionName": "ASPNETCORE_ENVIRONMENT",
+    "Value": "Production"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:application:environment",
+    "OptionName": "ASPNETCORE_URLS",
+    "Value": "http://127.0.0.1:5000"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:application:environment",
+    "OptionName": "ApiBaseAddress",
+    "Value": "https://d5i11y0jd8.execute-api.us-east-1.amazonaws.com"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:application:environment",
+    "OptionName": "DonationApi__BaseUrl",
+    "Value": "https://d5i11y0jd8.execute-api.us-east-1.amazonaws.com"
   },
   {
     "Namespace": "aws:elasticbeanstalk:application:environment",
@@ -46,7 +61,12 @@
   },
   {
     "Namespace": "aws:elasticbeanstalk:application:environment",
-    "OptionName": "DonationApi__BaseUrl",
-    "Value": "https://d5i11y0jd8.execute-api.us-east-1.amazonaws.com"
+    "OptionName": "ObjectStorage__Region",
+    "Value": "us-east-1"
+  },
+  {
+    "Namespace": "aws:elasticbeanstalk:application:environment",
+    "OptionName": "PROJECT",
+    "Value": "aws-asm3"
   }
 ]

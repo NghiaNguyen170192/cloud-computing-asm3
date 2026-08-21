@@ -217,7 +217,12 @@ public static class Extensions
 
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
-        app.UseHttpsRedirection();
+        // Skip HTTPS redirect on Lambda / HTTP-only hosts (API Gateway terminates TLS).
+        var onLambda = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AWS_LAMBDA_FUNCTION_NAME"));
+        if (!onLambda && app.Environment.IsDevelopment())
+        {
+            app.UseHttpsRedirection();
+        }
 
         // app.UseAuthentication();
         app.UseRouting();

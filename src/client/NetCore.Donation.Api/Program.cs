@@ -18,10 +18,17 @@ using NetCore.Donation.ServiceDefaults;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Override URLs if not set by Aspire
-if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
+var onLambda = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AWS_LAMBDA_FUNCTION_NAME"));
+
+// Local Kestrel only. On Lambda, the Hosting package owns the server.
+if (!onLambda && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
 {
     builder.WebHost.UseUrls("http://localhost:6000", "https://localhost:6001");
+}
+
+if (onLambda)
+{
+    builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 }
 
 builder.AddServiceDefaults();
@@ -51,6 +58,35 @@ if (!string.IsNullOrWhiteSpace(redisConnectionString))
     builder.Configuration["Database:RedisConnectionString"] = redisConnectionString;
 }
 
+// ServiceDefaults embedded Production placeholders ("#{...}") are loaded after env vars and
+// would otherwise win. Re-apply real AWS env values last.
+foreach (var (envKey, configKey) in new (string, string)[]
+         {
+             ("Database__ApplicationConnectionString", "Database:ApplicationConnectionString"),
+             ("Database__Provider", "Database:Provider"),
+             ("Database__MigrationsAssembly", "Database:MigrationsAssembly"),
+             ("Database__RedisConnectionString", "Database:RedisConnectionString"),
+             ("ObjectStorage__BucketName", "ObjectStorage:BucketName"),
+             ("ObjectStorage__Region", "ObjectStorage:Region"),
+             ("ObjectStorage__ForcePathStyle", "ObjectStorage:ForcePathStyle"),
+             ("ObjectStorage__CreateBucketIfNotExists", "ObjectStorage:CreateBucketIfNotExists"),
+         })
+{
+    var value = Environment.GetEnvironmentVariable(envKey);
+    if (!string.IsNullOrWhiteSpace(value) && !value.Contains("#{", StringComparison.Ordinal))
+    {
+        builder.Configuration[configKey] = value;
+    }
+}
+
+// Drop MinIO-only settings on Lambda so the SDK uses IAM + regional S3.
+if (onLambda)
+{
+    builder.Configuration["ObjectStorage:ServiceUrl"] = string.Empty;
+    builder.Configuration["ObjectStorage:AccessKey"] = string.Empty;
+    builder.Configuration["ObjectStorage:SecretKey"] = string.Empty;
+}
+
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
@@ -59,7 +95,13 @@ builder.Services.AddScoped<ICorrelationIdAccessor>(sp =>
     new CorrelationIdAccessor(sp.GetRequiredService<IHttpContextAccessor>()));
 builder.Services.AddScoped<IIdempotencyKeyAccessor>(sp =>
     new IdempotencyKeyAccessor(sp.GetRequiredService<IHttpContextAccessor>()));
-builder.Services.AddHostedService<OutboxProcessor>();
+
+// Background outbox polling belongs on aws-asm3-outbox-worker, not the request Lambda.
+if (!onLambda &&
+    !string.Equals(Environment.GetEnvironmentVariable("DISABLE_OUTBOX_PROCESSOR"), "true", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddHostedService<OutboxProcessor>();
+}
 
 // Dependency Injections
 builder.Services

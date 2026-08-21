@@ -18,16 +18,28 @@ public sealed class DonationSeed(
     ICountryRepository countryRepository,
     ILogger<DonationSeed> logger) : IDataSeed
 {
-    private const int RecordCount = 5000;
+    private const int DefaultRecordCount = 5000;
     private const int Seed = 20260817;
     private const float RecurringShare = 0.3f;
 
     public IEnumerable<Type> Dependencies => [typeof(CountrySeed)];
 
+    private static int ResolveRecordCount()
+    {
+        var raw = Environment.GetEnvironmentVariable("SEED_DONATION_COUNT");
+        if (int.TryParse(raw, out var count) && count > 0)
+        {
+            return count;
+        }
+
+        return DefaultRecordCount;
+    }
+
     public async Task SeedAsync()
     {
+        var recordCount = ResolveRecordCount();
         var existing = await context.Contacts.CountAsync();
-        if (existing >= RecordCount)
+        if (existing >= recordCount)
         {
             logger.LogInformation("Skipping donation seed; {Count} contacts already exist.", existing);
             return;
@@ -41,11 +53,12 @@ public sealed class DonationSeed(
             throw new InvalidOperationException("Countries must be seeded before donation data.");
         }
 
-        var remaining = RecordCount - existing;
+        var remaining = recordCount - existing;
         logger.LogInformation(
-            "Seeding {Remaining} donations through the application layer ({Existing} contacts already present).",
+            "Seeding {Remaining} donations through the application layer ({Existing} contacts already present; target {Target}).",
             remaining,
-            existing);
+            existing,
+            recordCount);
 
         var faker = new Faker("en_AU") { Random = new Randomizer(Seed + existing) };
         var recurringIntervals = Enum.GetValues<RecurringInterval>()
