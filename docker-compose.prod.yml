@@ -1,0 +1,140 @@
+# ============================================================================
+# Docker Compose for PRODUCTION DEPLOYMENT
+# ============================================================================
+# This file runs ALL services as Docker containers for production.
+# DO NOT use this for local development - use .NET Aspire AppHost instead.
+#
+# Production deployment steps:
+#   1. Build: docker compose --env-file .env -f docker-compose.prod.yml build
+#   2. Run: docker compose --env-file .env -f docker-compose.prod.yml up -d
+#
+# For local development, use:
+#   1. docker compose -f docker-compose.local.yml up -d db redis
+#   2. cd src/client/NetCore.Donation.AppHost && dotnet run
+# ============================================================================
+
+services:
+  # PostgreSQL Database
+  db:
+    container_name: db
+    hostname: db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-LkzPjQKGLT2FXTbjVJcavSNL5WMGxi!1}
+      - POSTGRES_DB=postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    image: postgres:17-alpine
+    ports:
+      - "5432:5432"
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - netcore-network
+
+  # Redis Cache
+  redis:
+    container_name: redis
+    hostname: redis
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+    networks:
+      - netcore-network
+
+  # Dozzle - Docker log viewer for production monitoring
+  dozzle:
+    container_name: dozzle
+    image: amir20/dozzle:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - 8080:8080
+    healthcheck:
+      test: ["CMD", "/dozzle", "healthcheck"]
+      interval: 3s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+    networks:
+      - netcore-network
+
+  # Database Migration Service - Runs once on startup
+  netcore-migration:
+    container_name: netcore-migration
+    hostname: netcore-migration
+    build:
+      context: .
+      dockerfile: src/client/NetCore.Donation.Migration/Dockerfile
+    command: ["dotnet", "NetCore.Donation.Migration.dll", "-d", "-m", "-s", "-t"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
+    networks:
+      - netcore-network
+
+  # API Service - Main backend application
+  netcore-api:
+    container_name: netcore-api
+    hostname: netcore-api
+    build:
+      context: .
+      dockerfile: src/client/NetCore.Donation.Api/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      netcore-migration:
+        condition: service_completed_successfully
+    ports:
+      - 6000:80
+      - 6001:443
+    environment:
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
+      - ASPNETCORE_URLS=${ASPNETCORE_URLS}
+      - ASPNETCORE_Kestrel__Certificates__Default__Password=${ASPNETCORE_Kestrel__Certificates__Default__Password}
+      - ASPNETCORE_Kestrel__Certificates__Default__Path=${ASPNETCORE_Kestrel__Certificates__Default__Path}
+    volumes:
+      - ./certificates/.netcore-api/https:/https:ro
+    networks:
+      - netcore-network
+    restart: always
+
+  # UI Service - Blazor WebAssembly frontend (uncomment for production)
+  # netcore-ui:
+  #   container_name: netcore-ui
+  #   hostname: netcore-ui
+  #   build:
+  #     context: .
+  #     dockerfile: src/client/NetCore.Donation.UI/Dockerfile
+  #   depends_on:
+  #     - netcore-api
+  #   ports:
+  #     - 6010:80
+  #     - 6011:443
+  #   environment:
+  #     - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
+  #     - ASPNETCORE_URLS=${ASPNETCORE_URLS}
+  #   networks:
+  #     - netcore-network
+  #   restart: always
+
+volumes:
+  postgres_data:
+
+networks:
+  netcore-network:
+    external: true

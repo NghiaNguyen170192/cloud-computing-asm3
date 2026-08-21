@@ -1,0 +1,119 @@
+@page "/receipts"
+@inject DonationApiClient Api
+@inject IJSRuntime JS
+
+<PageTitle>Receipts — Donation admin</PageTitle>
+
+<h1>Receipts</h1>
+<p class="text-muted">Digital receipts. Filter with OData <code>$select</code>, <code>$filter</code>, and <code>$top</code>.</p>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+<RadzenStack Gap="1rem" class="list-page">
+    <FilterToolbar @bind-Auto="@auto" Apply="@ApplyFilter" />
+
+    <RadzenDataFilter @ref="dataFilter" Auto="@auto" TItem="ReceiptDto" ViewChanged="@(_ => grid.Reload())">
+        <Properties>
+            <RadzenDataFilterProperty Property="@nameof(ReceiptDto.Identifier)" Title="Identifier" />
+            <RadzenDataFilterProperty Property="@nameof(ReceiptDto.HasDocument)" Title="Has document" />
+            <RadzenDataFilterProperty Property="@nameof(ReceiptDto.ContactFullName)" Title="Contact" />
+            <RadzenDataFilterProperty Property="@nameof(ReceiptDto.TransactionIdentifier)" Title="Transaction" />
+            <RadzenDataFilterProperty Property="@nameof(ReceiptDto.PaymentScheduleIdentifier)" Title="Schedule" />
+        </Properties>
+    </RadzenDataFilter>
+
+    <RadzenDataGrid @ref="grid" TItem="ReceiptDto" Data="@items" Count="@count" LoadData="@LoadData"
+                    IsLoading="@loading" AllowPaging="true" AllowSorting="true" PageSize="20"
+                    PagerHorizontalAlign="HorizontalAlign.Left" class="admin-data-grid">
+        <Columns>
+            <RadzenDataGridColumn Property="@nameof(ReceiptDto.Identifier)" Title="Receipt">
+                <Template Context="receipt">
+                    <EntityLink Path="receipts" Id="receipt.Id" Text="@RadzenODataQuery.IdentifierOrShort(receipt.Identifier, receipt.Id)" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Property="@nameof(ReceiptDto.ContactFullName)" Title="Contact">
+                <Template Context="receipt">
+                    <EntityLink Path="contacts" Id="receipt.ContactId" Text="@receipt.ContactFullName" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Property="@nameof(ReceiptDto.TransactionIdentifier)" Title="Transaction">
+                <Template Context="receipt">
+                    <EntityLink Path="transactions" Id="receipt.TransactionId" Text="@RadzenODataQuery.IdentifierOrShort(receipt.TransactionIdentifier, receipt.TransactionId)" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Property="@nameof(ReceiptDto.PaymentScheduleIdentifier)" Title="Schedule">
+                <Template Context="receipt">
+                    <EntityLink Path="payment-schedules" Id="receipt.PaymentScheduleId" Text="@RadzenODataQuery.IdentifierOrShort(receipt.PaymentScheduleIdentifier, receipt.PaymentScheduleId)" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Property="@nameof(ReceiptDto.HasDocument)" Title="Document">
+                <Template Context="receipt">
+                    @if (receipt.HasDocument)
+                    {
+                        <RadzenButton Text="Download" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                                      Click="@(() => DownloadAsync(receipt))" />
+                    }
+                    else
+                    {
+                        <span class="text-muted">None</span>
+                    }
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenStack>
+
+@code {
+    private const string Select = "Id,Identifier,ContactId,ContactFullName,TransactionId,TransactionIdentifier,PaymentScheduleId,PaymentScheduleIdentifier,DocumentFileName,HasDocument";
+    private bool auto = true;
+    private bool loading;
+    private string? error;
+    private int count;
+    private IEnumerable<ReceiptDto> items = [];
+    private RadzenDataFilter<ReceiptDto> dataFilter = default!;
+    private RadzenDataGrid<ReceiptDto> grid = default!;
+
+    private async Task ApplyFilter() => await dataFilter.Filter();
+
+    private async Task LoadData(LoadDataArgs args)
+    {
+        loading = true;
+        try
+        {
+            var result = await Api.QueryReceiptsAsync(RadzenODataQuery.From(args, dataFilter, Select));
+            items = result.Value;
+            count = result.Count;
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+            items = [];
+            count = 0;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task DownloadAsync(ReceiptDto receipt)
+    {
+        try
+        {
+            var pdf = await Api.GetReceiptPdfAsync(receipt.Id);
+            var fileName = string.IsNullOrWhiteSpace(receipt.DocumentFileName)
+                ? $"receipt-{receipt.Id:N}.pdf"
+                : receipt.DocumentFileName;
+            await JS.InvokeVoidAsync("downloadFile", fileName, "application/pdf", pdf);
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+        }
+    }
+}

@@ -1,0 +1,88 @@
+@page "/contacts"
+@inject DonationApiClient Api
+
+<PageTitle>Contacts — Donation admin</PageTitle>
+
+<h1>Contacts</h1>
+<p class="text-muted">Filter and page contacts with Radzen DataFilter over OData <code>$select</code>, <code>$filter</code>, and <code>$top</code>.</p>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+<RadzenStack Gap="1rem" class="list-page">
+    <FilterToolbar @bind-Auto="@auto" Apply="@ApplyFilter" />
+
+    <RadzenDataFilter @ref="dataFilter" Auto="@auto" TItem="ContactDto" ViewChanged="@(_ => grid.Reload())">
+        <Properties>
+            <RadzenDataFilterProperty Property="@nameof(ContactDto.FullName)" Title="Full name" />
+            <RadzenDataFilterProperty Property="@nameof(ContactDto.FirstName)" Title="First name" />
+            <RadzenDataFilterProperty Property="@nameof(ContactDto.LastName)" Title="Last name" />
+            <RadzenDataFilterProperty Property="@nameof(ContactDto.Email)" Title="Email" />
+            <RadzenDataFilterProperty Property="@nameof(ContactDto.PhoneNumber)" Title="Phone" />
+            <RadzenDataFilterProperty Property="@nameof(ContactDto.Gender)" Title="Gender" />
+            <RadzenDataFilterProperty Property="@nameof(ContactDto.CountryName)" Title="Country" />
+            <RadzenDataFilterProperty Property="@nameof(ContactDto.IsActive)" Title="Active" />
+            <RadzenDataFilterProperty Property="@nameof(ContactDto.DoNotEmail)" Title="Do not email" />
+            <RadzenDataFilterProperty Property="@nameof(ContactDto.DoNotSms)" Title="Do not SMS" />
+        </Properties>
+    </RadzenDataFilter>
+
+    <RadzenDataGrid @ref="grid" TItem="ContactDto" Data="@items" Count="@count" LoadData="@LoadData"
+                    IsLoading="@loading" AllowPaging="true" AllowSorting="true" PageSize="20"
+                    PagerHorizontalAlign="HorizontalAlign.Left" class="admin-data-grid">
+        <Columns>
+            <RadzenDataGridColumn Property="@nameof(ContactDto.FullName)" Title="Name">
+                <Template Context="contact">
+                    <EntityLink Path="contacts" Id="contact.Id" Text="@contact.DisplayName" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Property="@nameof(ContactDto.Email)" Title="Email" />
+            <RadzenDataGridColumn Property="@nameof(ContactDto.Gender)" Title="Gender" />
+            <RadzenDataGridColumn Property="@nameof(ContactDto.PhoneNumber)" Title="Phone" />
+            <RadzenDataGridColumn Property="@nameof(ContactDto.CountryName)" Title="Country" />
+            <RadzenDataGridColumn Property="@nameof(ContactDto.IsActive)" Title="Active" />
+            <RadzenDataGridColumn Property="@nameof(ContactDto.DoNotEmail)" Title="Prefs" SortProperty="@nameof(ContactDto.DoNotEmail)">
+                <Template Context="contact">
+                    @(contact.DoNotEmail ? "no email" : "email ok") / @(contact.DoNotSms ? "no SMS" : "SMS ok")
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenStack>
+
+@code {
+    private const string Select = "Id,FullName,FirstName,LastName,Email,PhoneNumber,Gender,CountryName,IsActive,DoNotEmail,DoNotSms";
+    private bool auto = true;
+    private bool loading;
+    private string? error;
+    private int count;
+    private IEnumerable<ContactDto> items = [];
+    private RadzenDataFilter<ContactDto> dataFilter = default!;
+    private RadzenDataGrid<ContactDto> grid = default!;
+
+    private async Task ApplyFilter() => await dataFilter.Filter();
+
+    private async Task LoadData(LoadDataArgs args)
+    {
+        loading = true;
+        try
+        {
+            var result = await Api.QueryContactsAsync(RadzenODataQuery.From(args, dataFilter, Select));
+            items = result.Value;
+            count = result.Count;
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+            items = [];
+            count = 0;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

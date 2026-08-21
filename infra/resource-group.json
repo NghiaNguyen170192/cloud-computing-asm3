@@ -1,0 +1,12 @@
+{
+  "Name": "donation-asm3-rg",
+  "Description": "COSC29800 A3 resources tagged Project aws-asm3",
+  "ResourceQuery": {
+    "Type": "TAG_FILTERS_1_0",
+    "Query": "{\"ResourceTypeFilters\":[\"AWS::AllSupported\"],\"TagFilters\":[{\"Key\":\"Project\",\"Values\":[\"aws-asm3\"]}]}"
+  },
+  "Tags": {
+    "Project": "aws-asm3",
+    "Assignment": "COSC29800-A3"
+  }
+}

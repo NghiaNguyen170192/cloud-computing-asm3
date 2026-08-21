@@ -1,0 +1,25 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.4.6">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsAspireProject>true</IsAspireProject>
+    <UserSecretsId>fc7a4139-1210-428b-9e5d-9077c0d73a1f</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- <PackageReference Include="Aspire.Hosting.AppHost" /> -->
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+    <PackageReference Include="Aspire.Hosting.Redis" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\NetCore.Donation.Api\NetCore.Donation.Api.csproj" />
+    <ProjectReference Include="..\NetCore.Donation.UI\NetCore.Donation.UI.csproj" />
+    <ProjectReference Include="..\NetCore.Donation.Admin\NetCore.Donation.Admin.csproj" />
+    <ProjectReference Include="..\NetCore.Donation.Migration\NetCore.Donation.Migration.csproj" />
+  </ItemGroup>
+</Project>

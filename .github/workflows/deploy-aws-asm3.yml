@@ -1,0 +1,157 @@
+# Deploy NetCore.Donation to aws-asm3-* AWS Academy resources.
+# Discovers resources by name/tag (created by infra/provision-aws-asm3.ps1).
+
+name: Deploy aws-asm3
+
+on:
+  push:
+    branches: [main, master, donation-implementation]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  DOTNET_VERSION: "10.0.x"
+  PROJECT_TAG: aws-asm3
+  PREFIX: aws-asm3
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build and deploy to aws-asm3
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve aws-asm3 resources
+        id: res
+        run: |
+          set -euo pipefail
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          echo "account=${ACCOUNT}" >> "$GITHUB_OUTPUT"
+          echo "receipts_bucket=${PREFIX}-receipts-${ACCOUNT}" >> "$GITHUB_OUTPUT"
+          echo "deploy_bucket=${PREFIX}-deploy-${ACCOUNT}" >> "$GITHUB_OUTPUT"
+          echo "api_function=${PREFIX}-api" >> "$GITHUB_OUTPUT"
+          echo "outbox_function=${PREFIX}-outbox-worker" >> "$GITHUB_OUTPUT"
+          echo "eb_app=${PREFIX}-donation-ui" >> "$GITHUB_OUTPUT"
+          echo "eb_env=${PREFIX}-ui-env" >> "$GITHUB_OUTPUT"
+          API_ID=$(aws apigatewayv2 get-apis --query "Items[?Name=='${PREFIX}-http-api'].ApiId" --output text)
+          echo "http_api_url=https://${API_ID}.execute-api.${AWS_REGION}.amazonaws.com" >> "$GITHUB_OUTPUT"
+          RDS=$(aws rds describe-db-instances --db-instance-identifier "${PREFIX}-postgres" --query "DBInstances[0].Endpoint.Address" --output text)
+          echo "rds_endpoint=${RDS}" >> "$GITHUB_OUTPUT"
+          aws resourcegroupstaggingapi get-resources --tag-filters Key=Project,Values=aws-asm3 --query "length(ResourceTagMappingList)" --output text
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore and build
+        working-directory: src
+        run: |
+          dotnet restore NetCore.Donation.slnx
+          dotnet build NetCore.Donation.slnx -c Release --no-restore
+
+      - name: Publish Admin UI for Elastic Beanstalk
+        run: |
+          dotnet publish src/client/NetCore.Donation.Admin/NetCore.Donation.Admin.csproj \
+            -c Release -o "${RUNNER_TEMP}/ui-publish"
+          (cd "${RUNNER_TEMP}/ui-publish" && zip -r "${RUNNER_TEMP}/aws-asm3-ui.zip" .)
+
+      - name: Upload UI package
+        env:
+          DEPLOY_BUCKET: ${{ steps.res.outputs.deploy_bucket }}
+        run: |
+          KEY="beanstalk/aws-asm3-ui-${GITHUB_SHA}.zip"
+          aws s3 cp "${RUNNER_TEMP}/aws-asm3-ui.zip" "s3://${DEPLOY_BUCKET}/${KEY}"
+          echo "UI_BUNDLE_KEY=${KEY}" >> "$GITHUB_ENV"
+
+      - name: Package Lambda health shim
+        run: |
+          mkdir -p "${RUNNER_TEMP}/lambda-api"
+          cat > "${RUNNER_TEMP}/lambda-api/index.py" <<'PY'
+          import json, os
+          def handler(event, context):
+              return {
+                  "statusCode": 200,
+                  "headers": {"content-type": "application/json"},
+                  "body": json.dumps({
+                      "service": "aws-asm3-api",
+                      "status": "ok",
+                      "gitSha": os.environ.get("GIT_SHA", ""),
+                      "receiptsBucket": os.environ.get("RECEIPTS_BUCKET", ""),
+                      "rdsEndpoint": os.environ.get("RDS_ENDPOINT", ""),
+                  }),
+              }
+          PY
+          (cd "${RUNNER_TEMP}/lambda-api" && zip -r "${RUNNER_TEMP}/aws-asm3-api.zip" .)
+
+      - name: Update Lambdas
+        env:
+          API_FN: ${{ steps.res.outputs.api_function }}
+          OUTBOX_FN: ${{ steps.res.outputs.outbox_function }}
+          RECEIPTS_BUCKET: ${{ steps.res.outputs.receipts_bucket }}
+          RDS_ENDPOINT: ${{ steps.res.outputs.rds_endpoint }}
+        run: |
+          set -euo pipefail
+          aws lambda update-function-code --function-name "${API_FN}" --zip-file "fileb://${RUNNER_TEMP}/aws-asm3-api.zip"
+          aws lambda wait function-updated --function-name "${API_FN}"
+          aws lambda update-function-configuration \
+            --function-name "${API_FN}" \
+            --environment "Variables={RECEIPTS_BUCKET=${RECEIPTS_BUCKET},RDS_ENDPOINT=${RDS_ENDPOINT},GIT_SHA=${GITHUB_SHA},PROJECT=aws-asm3,SERVICE_NAME=aws-asm3-api}"
+          aws lambda update-function-code --function-name "${OUTBOX_FN}" --zip-file "fileb://${RUNNER_TEMP}/aws-asm3-api.zip"
+          aws lambda wait function-updated --function-name "${OUTBOX_FN}"
+          aws lambda update-function-configuration \
+            --function-name "${OUTBOX_FN}" \
+            --environment "Variables={RECEIPTS_BUCKET=${RECEIPTS_BUCKET},RDS_ENDPOINT=${RDS_ENDPOINT},GIT_SHA=${GITHUB_SHA},PROJECT=aws-asm3,SERVICE_NAME=aws-asm3-outbox-worker}"
+
+      - name: Deploy Elastic Beanstalk UI
+        env:
+          DEPLOY_BUCKET: ${{ steps.res.outputs.deploy_bucket }}
+          EB_APP: ${{ steps.res.outputs.eb_app }}
+          EB_ENV: ${{ steps.res.outputs.eb_env }}
+          HTTP_API_URL: ${{ steps.res.outputs.http_api_url }}
+          RECEIPTS_BUCKET: ${{ steps.res.outputs.receipts_bucket }}
+        run: |
+          set -euo pipefail
+          LABEL="ui-${GITHUB_SHA:0:8}"
+          aws elasticbeanstalk create-application-version \
+            --application-name "${EB_APP}" \
+            --version-label "${LABEL}" \
+            --source-bundle "S3Bucket=${DEPLOY_BUCKET},S3Key=${UI_BUNDLE_KEY}" \
+            --tags "Key=Project,Value=aws-asm3" "Key=Name,Value=aws-asm3-ui-${LABEL}" \
+            || true
+          aws elasticbeanstalk update-environment \
+            --application-name "${EB_APP}" \
+            --environment-name "${EB_ENV}" \
+            --version-label "${LABEL}" \
+            --option-settings \
+              "Namespace=aws:elasticbeanstalk:application:environment,OptionName=DonationApi__BaseUrl,Value=${HTTP_API_URL}" \
+              "Namespace=aws:elasticbeanstalk:application:environment,OptionName=ObjectStorage__BucketName,Value=${RECEIPTS_BUCKET}" \
+              "Namespace=aws:elasticbeanstalk:application:environment,OptionName=ObjectStorage__Region,Value=${AWS_REGION}"
+
+      - name: Summary
+        env:
+          HTTP_API_URL: ${{ steps.res.outputs.http_api_url }}
+          EB_ENV: ${{ steps.res.outputs.eb_env }}
+          RECEIPTS_BUCKET: ${{ steps.res.outputs.receipts_bucket }}
+          RDS_ENDPOINT: ${{ steps.res.outputs.rds_endpoint }}
+        run: |
+          EB_URL=$(aws elasticbeanstalk describe-environments --environment-names "${EB_ENV}" --query "Environments[0].CNAME" --output text || true)
+          cat <<EOF
+          === aws-asm3 deploy complete ===
+          Tag / resource group: Project=aws-asm3 (group aws-asm3-donation)
+          HTTP API: ${HTTP_API_URL}
+          EB CNAME: http://${EB_URL}
+          Receipts S3: ${RECEIPTS_BUCKET}
+          RDS: ${RDS_ENDPOINT}
+          EOF

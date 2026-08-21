@@ -1,0 +1,77 @@
+@page "/journals"
+@inject DonationApiClient Api
+
+<PageTitle>Journals — Donation admin</PageTitle>
+
+<h1>Journals</h1>
+<p class="text-muted">Ledger lines for posted gifts. Filter with OData <code>$select</code>, <code>$filter</code>, and <code>$top</code>.</p>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+<RadzenStack Gap="1rem" class="list-page">
+    <FilterToolbar @bind-Auto="@auto" Apply="@ApplyFilter" />
+
+    <RadzenDataFilter @ref="dataFilter" Auto="@auto" TItem="JournalDto" ViewChanged="@(_ => grid.Reload())">
+        <Properties>
+            <RadzenDataFilterProperty Property="@nameof(JournalDto.Identifier)" Title="Identifier" />
+            <RadzenDataFilterProperty Property="@nameof(JournalDto.CreatedDate)" Title="Created (UTC)" />
+            <RadzenDataFilterProperty Property="@nameof(JournalDto.TransactionIdentifier)" Title="Transaction" />
+        </Properties>
+    </RadzenDataFilter>
+
+    <RadzenDataGrid @ref="grid" TItem="JournalDto" Data="@items" Count="@count" LoadData="@LoadData"
+                    IsLoading="@loading" AllowPaging="true" AllowSorting="true" PageSize="20"
+                    PagerHorizontalAlign="HorizontalAlign.Left" class="admin-data-grid">
+        <Columns>
+            <RadzenDataGridColumn Property="@nameof(JournalDto.Identifier)" Title="Journal">
+                <Template Context="journal">
+                    <EntityLink Path="journals" Id="journal.Id" Text="@RadzenODataQuery.IdentifierOrShort(journal.Identifier, journal.Id)" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Property="@nameof(JournalDto.CreatedDate)" Title="Created (UTC)" FormatString="{0:u}" />
+            <RadzenDataGridColumn Property="@nameof(JournalDto.TransactionIdentifier)" Title="Transaction">
+                <Template Context="journal">
+                    <EntityLink Path="transactions" Id="journal.TransactionId" Text="@RadzenODataQuery.IdentifierOrShort(journal.TransactionIdentifier, journal.TransactionId)" />
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenStack>
+
+@code {
+    private const string Select = "Id,Identifier,TransactionId,TransactionIdentifier,CreatedDate";
+    private bool auto = true;
+    private bool loading;
+    private string? error;
+    private int count;
+    private IEnumerable<JournalDto> items = [];
+    private RadzenDataFilter<JournalDto> dataFilter = default!;
+    private RadzenDataGrid<JournalDto> grid = default!;
+
+    private async Task ApplyFilter() => await dataFilter.Filter();
+
+    private async Task LoadData(LoadDataArgs args)
+    {
+        loading = true;
+        try
+        {
+            var result = await Api.QueryJournalsAsync(RadzenODataQuery.From(args, dataFilter, Select));
+            items = result.Value;
+            count = result.Count;
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+            items = [];
+            count = 0;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

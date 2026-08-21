@@ -1,0 +1,25 @@
+{
+  "account": "026652000073",
+  "region": "us-east-1",
+  "projectTag": "aws-asm3",
+  "resourceGroup": "donation-asm3-rg",
+  "receiptsBucket": "aws-asm3-receipts-026652000073",
+  "deployBucket": "aws-asm3-deploy-026652000073",
+  "analyticsBucket": "aws-asm3-analytics-026652000073",
+  "httpApiUrl": "https://d5i11y0jd8.execute-api.us-east-1.amazonaws.com",
+  "apiFunction": "aws-asm3-api",
+  "outboxFunction": "aws-asm3-outbox-worker",
+  "ebApplication": "aws-asm3-donation-ui",
+  "ebEnvironment": "aws-asm3-ui-env",
+  "ebCname": "aws-asm3-ui-env.eba-mrhkizyq.us-east-1.elasticbeanstalk.com",
+  "rdsInstanceId": "aws-asm3-postgres",
+  "rdsEndpoint": "aws-asm3-postgres.c8eabaw8smvd.us-east-1.rds.amazonaws.com",
+  "glueDatabase": "aws_asm3_donation",
+  "athenaWorkGroup": "aws-asm3-analytics",
+  "dbPasswordFile": "C:\\Users\\nghia\\.aws\\aws-asm3-db-password.txt",
+  "githubSecrets": [
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN"
+  ]
+}

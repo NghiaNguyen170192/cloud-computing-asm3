@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RuleSet Name="StyleCop Rules" Description="StyleCop rules for all projects" ToolsVersion="16.0">
+	<Rules AnalyzerId="StyleCop.Analyzers" RuleNamespace="StyleCop.Analyzers">
+		<!-- Documentation Rules - Can be adjusted based on team preferences -->
+		<Rule Id="SA1600" Action="None" /> <!-- Elements should be documented -->
+		<Rule Id="SA1601" Action="None" /> <!-- Partial elements should be documented -->
+		<Rule Id="SA1602" Action="None" /> <!-- Enumeration items should be documented -->
+		<Rule Id="SA1633" Action="None" /> <!-- File should have header -->
+
+		<!-- Layout Rules -->
+		<Rule Id="SA1200" Action="None" /> <!-- Using directives should be placed correctly (we prefer inside namespace) -->
+		
+		<!-- Readability Rules -->
+		<Rule Id="SA1101" Action="None" /> <!-- Prefix local calls with this -->
+
+		<!-- Spacing Rules -->
+		<Rule Id="SA1027" Action="None" /> <!-- Tabs and spaces - disabled because project uses tabs -->
+
+		<!-- All other rules are set to Warning by default -->
+	</Rules>
+</RuleSet>

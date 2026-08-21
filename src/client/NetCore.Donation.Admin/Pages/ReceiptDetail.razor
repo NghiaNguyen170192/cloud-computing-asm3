@@ -1,0 +1,104 @@
+@page "/receipts/{Id:guid}"
+@inject DonationApiClient Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Receipt — Donation admin</PageTitle>
+
+<div class="d-flex align-items-center gap-3 mb-3">
+    <h1 class="mb-0">Receipt</h1>
+    <RadzenButton Text="Back to list" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@(() => Nav.NavigateTo("receipts"))" />
+</div>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+else if (loading)
+{
+    <p>Loading…</p>
+}
+else if (item is null)
+{
+    <p class="text-muted">Receipt not found.</p>
+}
+else
+{
+    <div class="detail-card">
+        <DetailGrid>
+            <DetailField Label="Identifier">@RadzenODataQuery.IdentifierOrShort(item.Identifier, item.Id)</DetailField>
+            <DetailField Label="Contact">
+                <EntityLink Path="contacts" Id="item.ContactId" Text="@item.ContactFullName" />
+            </DetailField>
+            <DetailField Label="Transaction">
+                <EntityLink Path="transactions" Id="item.TransactionId" Text="@RadzenODataQuery.IdentifierOrShort(item.TransactionIdentifier, item.TransactionId)" />
+            </DetailField>
+            <DetailField Label="Payment schedule">
+                <EntityLink Path="payment-schedules" Id="item.PaymentScheduleId" Text="@RadzenODataQuery.IdentifierOrShort(item.PaymentScheduleIdentifier, item.PaymentScheduleId)" />
+            </DetailField>
+            <DetailField Label="Document">
+                @if (item.HasDocument)
+                {
+                    <RadzenButton Text="Download PDF" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@DownloadAsync" />
+                    <span class="text-muted ms-2">@item.DocumentFileName</span>
+                }
+                else
+                {
+                    <span class="text-muted">None</span>
+                }
+            </DetailField>
+            <DetailField Label="Content type">@(item.DocumentContentType ?? "—")</DetailField>
+            <DetailField Label="Size">@(item.DocumentSizeBytes is { } size ? $"{size} bytes" : "—")</DetailField>
+            <DetailField Label="Generated (UTC)">@(item.DocumentGeneratedAtUtc?.ToString("u") ?? "—")</DetailField>
+        </DetailGrid>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private bool loading = true;
+    private string? error;
+    private ReceiptDto? item;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        try
+        {
+            item = await Api.GetReceiptAsync(Id);
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+            item = null;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task DownloadAsync()
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var pdf = await Api.GetReceiptPdfAsync(item.Id);
+            var fileName = string.IsNullOrWhiteSpace(item.DocumentFileName)
+                ? $"receipt-{item.Id:N}.pdf"
+                : item.DocumentFileName;
+            await JS.InvokeVoidAsync("downloadFile", fileName, "application/pdf", pdf);
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+        }
+    }
+}

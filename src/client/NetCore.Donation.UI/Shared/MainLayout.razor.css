@@ -1,0 +1,87 @@
+.site {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: #f6f3ee;
+    color: #1f2a24;
+}
+
+.site-header {
+    background: #14532d;
+    color: #fff;
+}
+
+.header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    min-height: 4rem;
+}
+
+.brand {
+    color: #fff;
+    font-weight: 700;
+    font-size: 1.25rem;
+    text-decoration: none;
+}
+
+.site-nav {
+    display: flex;
+    gap: 1.25rem;
+}
+
+.site-nav a {
+    color: #d7efe0;
+    text-decoration: none;
+}
+
+.site-nav a.active,
+.site-nav a:hover {
+    color: #fff;
+}
+
+.site-main {
+    flex: 1;
+    padding: 2rem 0 3rem;
+}
+
+.site-footer {
+    background: #0f172a;
+    color: #cbd5e1;
+    padding: 1rem 0;
+    font-size: 0.9rem;
+}
+
+.hero {
+    background: linear-gradient(135deg, #14532d, #166534 55%, #3f6212);
+    color: #fff;
+    border-radius: 1rem;
+    padding: 3rem 2rem;
+    margin-bottom: 2rem;
+}
+
+.hero h1 {
+    font-size: 2.4rem;
+    margin-bottom: 0.75rem;
+}
+
+.card-panel {
+    background: #fff;
+    border: 1px solid #e7e0d6;
+    border-radius: 0.85rem;
+    padding: 1.5rem;
+    box-shadow: 0 8px 24px rgba(20, 83, 45, 0.06);
+}
+
+.btn-give {
+    background: #166534;
+    border-color: #166534;
+    color: #fff;
+}
+
+.btn-give:hover {
+    background: #14532d;
+    border-color: #14532d;
+    color: #fff;
+}

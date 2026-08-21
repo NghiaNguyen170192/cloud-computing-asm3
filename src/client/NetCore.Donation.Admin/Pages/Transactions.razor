@@ -1,0 +1,95 @@
+@page "/transactions"
+@inject DonationApiClient Api
+
+<PageTitle>Transactions — Donation admin</PageTitle>
+
+<h1>Transactions</h1>
+<p class="text-muted">Posted and pending gifts. Filter with OData <code>$select</code>, <code>$filter</code>, and <code>$top</code>.</p>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+<RadzenStack Gap="1rem" class="list-page">
+    <FilterToolbar @bind-Auto="@auto" Apply="@ApplyFilter" />
+
+    <RadzenDataFilter @ref="dataFilter" Auto="@auto" TItem="TransactionDto" ViewChanged="@(_ => grid.Reload())">
+        <Properties>
+            <RadzenDataFilterProperty Property="@nameof(TransactionDto.Identifier)" Title="Identifier" />
+            <RadzenDataFilterProperty Property="@nameof(TransactionDto.Amount)" Title="Amount" />
+            <RadzenDataFilterProperty Property="@nameof(TransactionDto.BookDate)" Title="Book date" />
+            <RadzenDataFilterProperty Property="@nameof(TransactionDto.PaymentType)" Title="Type" />
+            <RadzenDataFilterProperty Property="@nameof(TransactionDto.Status)" Title="Status" />
+            <RadzenDataFilterProperty Property="@nameof(TransactionDto.ContactFullName)" Title="Contact" />
+            <RadzenDataFilterProperty Property="@nameof(TransactionDto.PaymentScheduleIdentifier)" Title="Schedule" />
+            <RadzenDataFilterProperty Property="@nameof(TransactionDto.PaymentMethodDisplayName)" Title="Method" />
+        </Properties>
+    </RadzenDataFilter>
+
+    <RadzenDataGrid @ref="grid" TItem="TransactionDto" Data="@items" Count="@count" LoadData="@LoadData"
+                    IsLoading="@loading" AllowPaging="true" AllowSorting="true" PageSize="20"
+                    PagerHorizontalAlign="HorizontalAlign.Left" class="admin-data-grid">
+        <Columns>
+            <RadzenDataGridColumn Property="@nameof(TransactionDto.Identifier)" Title="Transaction">
+                <Template Context="transaction">
+                    <EntityLink Path="transactions" Id="transaction.Id" Text="@RadzenODataQuery.IdentifierOrShort(transaction.Identifier, transaction.Id)" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Property="@nameof(TransactionDto.BookDate)" Title="Book date" />
+            <RadzenDataGridColumn Property="@nameof(TransactionDto.Amount)" Title="Amount" FormatString="{0:C}" />
+            <RadzenDataGridColumn Property="@nameof(TransactionDto.PaymentType)" Title="Type" />
+            <RadzenDataGridColumn Property="@nameof(TransactionDto.Status)" Title="Status" />
+            <RadzenDataGridColumn Property="@nameof(TransactionDto.ContactFullName)" Title="Contact">
+                <Template Context="transaction">
+                    <EntityLink Path="contacts" Id="transaction.ContactId" Text="@transaction.ContactFullName" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Property="@nameof(TransactionDto.PaymentScheduleIdentifier)" Title="Schedule">
+                <Template Context="transaction">
+                    <EntityLink Path="payment-schedules" Id="transaction.PaymentScheduleId" Text="@RadzenODataQuery.IdentifierOrShort(transaction.PaymentScheduleIdentifier, transaction.PaymentScheduleId)" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Property="@nameof(TransactionDto.PaymentMethodDisplayName)" Title="Method">
+                <Template Context="transaction">
+                    <EntityLink Path="payment-methods" Id="transaction.PaymentMethodId" Text="@transaction.PaymentMethodDisplayName" />
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenStack>
+
+@code {
+    private const string Select = "Id,Identifier,Amount,PaymentScheduleId,PaymentScheduleIdentifier,ContactId,ContactFullName,PaymentMethodId,PaymentMethodDisplayName,PaymentType,Status,BookDate,ReceivedDate";
+    private bool auto = true;
+    private bool loading;
+    private string? error;
+    private int count;
+    private IEnumerable<TransactionDto> items = [];
+    private RadzenDataFilter<TransactionDto> dataFilter = default!;
+    private RadzenDataGrid<TransactionDto> grid = default!;
+
+    private async Task ApplyFilter() => await dataFilter.Filter();
+
+    private async Task LoadData(LoadDataArgs args)
+    {
+        loading = true;
+        try
+        {
+            var result = await Api.QueryTransactionsAsync(RadzenODataQuery.From(args, dataFilter, Select));
+            items = result.Value;
+            count = result.Count;
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+            items = [];
+            count = 0;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

@@ -1,0 +1,118 @@
+@page "/money-flow"
+@inject DonationApiClient Api
+
+<PageTitle>Money flow — Donation admin</PageTitle>
+
+<h1>Money flow</h1>
+<p class="text-muted">
+    Domain-event history from the outbox. Expand a row to see where the money went:
+    donor → payment schedule (recurring) or transaction (one-time) → journal + receipt.
+</p>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+<RadzenStack Gap="1rem" class="list-page">
+    <FilterToolbar @bind-Auto="@auto" Apply="@ApplyFilter" />
+
+    <RadzenDataFilter @ref="dataFilter" Auto="@auto" TItem="DonationFlowDto" ViewChanged="@(_ => grid.Reload())">
+        <Properties>
+            <RadzenDataFilterProperty Property="@nameof(DonationFlowDto.Status)" Title="Status" />
+            <RadzenDataFilterProperty Property="@nameof(DonationFlowDto.Amount)" Title="Amount" />
+            <RadzenDataFilterProperty Property="@nameof(DonationFlowDto.MoneyPath)" Title="Money path" />
+            <RadzenDataFilterProperty Property="@nameof(DonationFlowDto.PaymentScheduleIdentifier)" Title="Schedule" />
+            <RadzenDataFilterProperty Property="@nameof(DonationFlowDto.TransactionIdentifier)" Title="Transaction" />
+            <RadzenDataFilterProperty Property="@nameof(DonationFlowDto.ContactEmail)" Title="Contact email" />
+        </Properties>
+    </RadzenDataFilter>
+
+    <RadzenDataGrid @ref="grid" TItem="DonationFlowDto" Data="@items" Count="@count" LoadData="@LoadData"
+                    IsLoading="@loading" AllowPaging="true" AllowSorting="true" PageSize="20"
+                    PagerHorizontalAlign="HorizontalAlign.Left" class="admin-data-grid">
+        <Template Context="flow">
+            <ol class="flow-steps mb-0">
+                @foreach (var step in flow.Steps)
+                {
+                    <li>
+                        <strong>@step.EventName</strong>
+                        <span> — @step.Summary</span>
+                        <div class="text-muted small">
+                            @step.OccurredAtUtc.ToString("u")
+                            @if (step.ProcessedAtUtc is { } processed)
+                            {
+                                <span> · processed @processed.ToString("u")</span>
+                            }
+                        </div>
+                    </li>
+                }
+            </ol>
+        </Template>
+        <Columns>
+            <RadzenDataGridColumn Property="@nameof(DonationFlowDto.LastEventAtUtc)" Title="Last event" FormatString="{0:u}" Width="180px" />
+            <RadzenDataGridColumn Property="@nameof(DonationFlowDto.Amount)" Title="Amount" FormatString="{0:C}" Width="120px" />
+            <RadzenDataGridColumn Property="@nameof(DonationFlowDto.Status)" Title="Status" Width="110px" />
+            <RadzenDataGridColumn Property="@nameof(DonationFlowDto.MoneyPath)" Title="Money path" />
+            <RadzenDataGridColumn Property="@nameof(DonationFlowDto.ContactEmail)" Title="Contact" Width="140px">
+                <Template Context="flow">
+                    <EntityLink Path="contacts" Id="flow.ContactId" Text="@(string.IsNullOrWhiteSpace(flow.ContactEmail) ? null : flow.ContactEmail)" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Property="@nameof(DonationFlowDto.PaymentScheduleIdentifier)" Title="Schedule" Width="170px">
+                <Template Context="flow">
+                    <EntityLink Path="payment-schedules" Id="flow.PaymentScheduleId" Text="@RadzenODataQuery.IdentifierOrShort(flow.PaymentScheduleIdentifier, flow.PaymentScheduleId)" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Property="@nameof(DonationFlowDto.TransactionIdentifier)" Title="Transaction" Width="180px">
+                <Template Context="flow">
+                    <EntityLink Path="transactions" Id="flow.TransactionId" Text="@RadzenODataQuery.IdentifierOrShort(flow.TransactionIdentifier, flow.TransactionId)" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Property="@nameof(DonationFlowDto.JournalIdentifier)" Title="Journal" Width="160px">
+                <Template Context="flow">
+                    <EntityLink Path="journals" Id="flow.JournalId" Text="@RadzenODataQuery.IdentifierOrShort(flow.JournalIdentifier, flow.JournalId)" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Property="@nameof(DonationFlowDto.ReceiptIdentifier)" Title="Receipt" Width="160px">
+                <Template Context="flow">
+                    <EntityLink Path="receipts" Id="flow.ReceiptId" Text="@RadzenODataQuery.IdentifierOrShort(flow.ReceiptIdentifier, flow.ReceiptId)" />
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenStack>
+
+@code {
+    private bool auto = true;
+    private bool loading;
+    private string? error;
+    private int count;
+    private IEnumerable<DonationFlowDto> items = [];
+    private RadzenDataFilter<DonationFlowDto> dataFilter = default!;
+    private RadzenDataGrid<DonationFlowDto> grid = default!;
+
+    private async Task ApplyFilter() => await dataFilter.Filter();
+
+    private async Task LoadData(LoadDataArgs args)
+    {
+        loading = true;
+        try
+        {
+            var result = await Api.QueryDonationFlowsAsync(RadzenODataQuery.From(args, dataFilter, string.Empty));
+            items = result.Value;
+            count = result.Count;
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+            items = [];
+            count = 0;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

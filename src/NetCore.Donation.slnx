@@ -1,0 +1,36 @@
+<Solution>
+  <Folder Name="/solution items/">
+    <File Path=".editorconfig" />
+    <File Path="Directory.Packages.props" />
+    <File Path="../.github/workflows/codeql-analysis.yml" />
+    <File Path="../docker-compose.local.yml" />
+    <File Path="../docker-compose.prod.yml" />
+    <File Path="../.github/workflows/netcore-ci.yml" />
+    <File Path="../README.md" />
+    <File Path="stylecop.json" />
+  </Folder>
+  <Folder Name="/client/">
+    <Folder Name="/NetCore.Donation/">
+      <Project Path="client\NetCore.Donation\NetCore.Donation.ServiceDefaults\NetCore.Donation.ServiceDefaults.csproj" Type="C#" />
+    </Folder>
+    <Project Path="client/NetCore.Donation.Admin/NetCore.Donation.Admin.csproj" />
+    <Project Path="client/NetCore.Donation.WebClient/NetCore.Donation.WebClient.csproj" />
+    <Project Path="client\NetCore.Donation.Api\NetCore.Donation.Api.csproj" />
+    <Project Path="client\NetCore.Donation.AppHost\NetCore.Donation.AppHost.csproj" />
+    <Project Path="client\NetCore.Donation.Migration\NetCore.Donation.Migration.csproj" />
+    <Project Path="client\NetCore.Donation.UI\NetCore.Donation.UI.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="NetCore.Donation.Application\NetCore.Donation.Application.csproj" />
+    <Project Path="NetCore.Donation.Domain\NetCore.Donation.Domain.csproj" />
+    <Project Path="NetCore.Donation.Infrastructure.Database\NetCore.Donation.Infrastructure.Database.csproj" />
+    <Project Path="NetCore.Donation.Infrastructure.Storage\NetCore.Donation.Infrastructure.Storage.csproj" />
+    <Project Path="NetCore.Donation.ServiceDefaults/NetCore.Donation.ServiceDefaults.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test\NetCore.Donation.Api.Tests\NetCore.Donation.Api.Tests.csproj" />
+    <Project Path="test\NetCore.Donation.Application.Tests\NetCore.Donation.Application.Tests.csproj" />
+    <Project Path="test\NetCore.Donation.Domain.Tests\NetCore.Donation.Domain.Tests.csproj" />
+    <Project Path="test\NetCore.Donation.Infrastructure.Database.Tests\NetCore.Donation.Infrastructure.Database.Tests.csproj" />
+  </Folder>
+</Solution>

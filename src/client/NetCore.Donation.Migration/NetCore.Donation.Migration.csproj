@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+		<DockerfileContext>..\..</DockerfileContext>
+		<IsAspireProjectResource>true</IsAspireProjectResource>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Content Include="appsettings.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+		<Content Include="appsettings.Development.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+		<Content Include="appsettings.Production.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+		<Content Include="App_Data\Seeds\countries.csv">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Aspire.StackExchange.Redis" />
+		<PackageReference Include="Bogus" />
+		<PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" />
+		<PackageReference Include="Scrutor" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\NetCore.Donation.Application\NetCore.Donation.Application.csproj" />
+		<ProjectReference Include="..\..\NetCore.Donation.Domain\NetCore.Donation.Domain.csproj" />
+		<ProjectReference Include="..\..\NetCore.Donation.Infrastructure.Database\NetCore.Donation.Infrastructure.Database.csproj" />
+		<ProjectReference Include="..\..\NetCore.Donation.Infrastructure.Storage\NetCore.Donation.Infrastructure.Storage.csproj" />
+		<ProjectReference Include="..\..\NetCore.Donation.ServiceDefaults\NetCore.Donation.ServiceDefaults.csproj">
+			<!-- Prevent ServiceDefaults content files from being copied -->
+			<PrivateAssets>contentfiles</PrivateAssets>
+		</ProjectReference>
+	</ItemGroup>
+</Project>

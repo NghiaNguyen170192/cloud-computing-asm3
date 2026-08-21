@@ -1,0 +1,77 @@
+@page "/payment-methods"
+@inject DonationApiClient Api
+
+<PageTitle>Payment methods — Donation admin</PageTitle>
+
+<h1>Payment methods</h1>
+<p class="text-muted">Stored payment methods. Filter with OData <code>$select</code>, <code>$filter</code>, and <code>$top</code>.</p>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+<RadzenStack Gap="1rem" class="list-page">
+    <FilterToolbar @bind-Auto="@auto" Apply="@ApplyFilter" />
+
+    <RadzenDataFilter @ref="dataFilter" Auto="@auto" TItem="PaymentMethodDto" ViewChanged="@(_ => grid.Reload())">
+        <Properties>
+            <RadzenDataFilterProperty Property="@nameof(PaymentMethodDto.DisplayName)" Title="Display name" />
+            <RadzenDataFilterProperty Property="@nameof(PaymentMethodDto.PaymentType)" Title="Payment type" />
+            <RadzenDataFilterProperty Property="@nameof(PaymentMethodDto.ContactFullName)" Title="Contact" />
+        </Properties>
+    </RadzenDataFilter>
+
+    <RadzenDataGrid @ref="grid" TItem="PaymentMethodDto" Data="@items" Count="@count" LoadData="@LoadData"
+                    IsLoading="@loading" AllowPaging="true" AllowSorting="true" PageSize="20"
+                    PagerHorizontalAlign="HorizontalAlign.Left" class="admin-data-grid">
+        <Columns>
+            <RadzenDataGridColumn Property="@nameof(PaymentMethodDto.DisplayName)" Title="Method">
+                <Template Context="method">
+                    <EntityLink Path="payment-methods" Id="method.Id" Text="@method.DisplayName" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Property="@nameof(PaymentMethodDto.PaymentType)" Title="Type" />
+            <RadzenDataGridColumn Property="@nameof(PaymentMethodDto.ContactFullName)" Title="Contact">
+                <Template Context="method">
+                    <EntityLink Path="contacts" Id="method.ContactId" Text="@method.ContactFullName" />
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenStack>
+
+@code {
+    private const string Select = "Id,DisplayName,PaymentType,ContactId,ContactFullName";
+    private bool auto = true;
+    private bool loading;
+    private string? error;
+    private int count;
+    private IEnumerable<PaymentMethodDto> items = [];
+    private RadzenDataFilter<PaymentMethodDto> dataFilter = default!;
+    private RadzenDataGrid<PaymentMethodDto> grid = default!;
+
+    private async Task ApplyFilter() => await dataFilter.Filter();
+
+    private async Task LoadData(LoadDataArgs args)
+    {
+        loading = true;
+        try
+        {
+            var result = await Api.QueryPaymentMethodsAsync(RadzenODataQuery.From(args, dataFilter, Select));
+            items = result.Value;
+            count = result.Count;
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+            items = [];
+            count = 0;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

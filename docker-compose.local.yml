@@ -1,0 +1,106 @@
+# ============================================================================
+# Docker Compose for LOCAL DEVELOPMENT - Infrastructure Only
+# ============================================================================
+# This file provides ONLY infrastructure services (PostgreSQL & Redis)
+# for local development with .NET Aspire AppHost.
+#
+# For local development:
+#   1. Run: docker compose -f docker-compose.local.yml up -d db redis
+#   2. Run the Aspire AppHost: cd src/client/NetCore.Donation.AppHost && dotnet run
+#
+# The .NET services (Migration, API, UI) are commented out because they
+# should be run via Aspire AppHost for better development experience.
+#
+# For production deployment, use: docker-compose.prod.yml
+# ============================================================================
+
+services:
+  # PostgreSQL Database - Used by both development and production
+  db:
+    container_name: db
+    hostname: db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-LkzPjQKGLT2FXTbjVJcavSNL5WMGxi!1}
+      - POSTGRES_DB=netcore-db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    image: postgres:17-alpine
+    ports:
+      - "5432:5432"
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - netcore-network
+
+  # Redis Cache - Used by both development and production
+  redis:
+    container_name: redis
+    hostname: redis
+    image: redis/redis-stack:latest
+    ports:
+      - "6379:6379"    # Redis port
+      - "8001:8001"    # Redis Insight web UI
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+    networks:
+      - netcore-network
+
+  # ============================================================================
+  # .NET SERVICES BELOW ARE COMMENTED OUT FOR LOCAL DEVELOPMENT
+  # Use .NET Aspire AppHost instead (better dev experience)
+  # ============================================================================
+  # Uncomment these ONLY if you want to test full Docker mode locally
+  # ============================================================================
+
+  # netcore-migration:
+  #   container_name: netcore-migration
+  #   hostname: netcore-migration
+  #   build:
+  #     context: .
+  #     dockerfile: src/client/NetCore.Donation.Migration/Dockerfile
+  #   command: ["dotnet", "NetCore.Donation.Migration.dll", "-d", "-m", "-s", "-t"]
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   environment:
+  #     - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
+  #   networks:
+  #     - netcore-network
+
+  # netcore-api:
+  #   container_name: netcore-api
+  #   hostname: netcore-api
+  #   build:
+  #     context: .
+  #     dockerfile: src/client/NetCore.Donation.Api/Dockerfile
+  #   depends_on:
+  #     netcore-migration:
+  #       condition: service_completed_successfully
+  #   ports:
+  #     - 6000:80
+  #     - 6001:443
+  #   environment:
+  #     - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
+  #     - ASPNETCORE_URLS=${ASPNETCORE_URLS}
+  #     - ASPNETCORE_Kestrel__Certificates__Default__Password=${ASPNETCORE_Kestrel__Certificates__Default__Password}
+  #     - ASPNETCORE_Kestrel__Certificates__Default__Path=${ASPNETCORE_Kestrel__Certificates__Default__Path}
+  #   volumes:
+  #     - ./certificates/.netcore-api/https:/https:ro
+  #   networks:
+  #     - netcore-network
+  #   restart: always
+
+  # netcore-ui:
+  #   container_name: netcore-ui
+  #   hostname: netcore-ui
+  #   build:
+  #     context: .

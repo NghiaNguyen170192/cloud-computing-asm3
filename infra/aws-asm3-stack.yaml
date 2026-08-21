@@ -1,0 +1,498 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  COSC29800 Assignment 3 — NetCore.Donation foundation stack.
+  All resources tagged Project=aws-asm3 and Name=aws-asm3-*.
+
+Parameters:
+  ProjectPrefix:
+    Type: String
+    Default: aws-asm3
+  DbUsername:
+    Type: String
+    Default: donationadmin
+    MinLength: 1
+  DbPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    Description: Master password for RDS PostgreSQL
+  LabRoleArn:
+    Type: String
+    Default: arn:aws:iam::026652000073:role/LabRole
+  LabInstanceProfileName:
+    Type: String
+    Default: LabInstanceProfile
+  VpcId:
+    Type: String
+    Default: vpc-0cd83a2dc1b09d1e4
+  SubnetIds:
+    Type: CommaDelimitedList
+    Default: subnet-0e43067a277531b6d,subnet-0ebbc28d107f9091a,subnet-0cd0784673be06ac1
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: { default: Database }
+        Parameters: [DbUsername, DbPassword]
+
+Resources:
+  CommonTags:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /${ProjectPrefix}/meta/stack-name
+      Type: String
+      Value: !Ref AWS::StackName
+      Tags:
+        Project: aws-asm3
+        Name: !Sub ${ProjectPrefix}-meta-stack-name
+        Assignment: COSC29800-A3
+
+  ReceiptsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${ProjectPrefix}-receipts-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: aws-asm3
+        - Key: Name
+          Value: !Sub ${ProjectPrefix}-receipts
+        - Key: Assignment
+          Value: COSC29800-A3
+
+  DeployBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${ProjectPrefix}-deploy-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: aws-asm3
+        - Key: Name
+          Value: !Sub ${ProjectPrefix}-deploy
+        - Key: Assignment
+          Value: COSC29800-A3
+
+  AnalyticsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${ProjectPrefix}-analytics-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: aws-asm3
+        - Key: Name
+          Value: !Sub ${ProjectPrefix}-analytics
+        - Key: Assignment
+          Value: COSC29800-A3
+
+  DbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: aws-asm3 RDS PostgreSQL access
+      GroupName: !Sub ${ProjectPrefix}-rds-sg
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 0.0.0.0/0
+          Description: Academy lab — open for Lambda/EB without VPC attach
+      Tags:
+        - Key: Project
+          Value: aws-asm3
+        - Key: Name
+          Value: !Sub ${ProjectPrefix}-rds-sg
+        - Key: Assignment
+          Value: COSC29800-A3
+
+  EbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: aws-asm3 Elastic Beanstalk instances
+      GroupName: !Sub ${ProjectPrefix}-eb-sg
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Project
+          Value: aws-asm3
+        - Key: Name
+          Value: !Sub ${ProjectPrefix}-eb-sg
+        - Key: Assignment
+          Value: COSC29800-A3
+
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub ${ProjectPrefix}-db-subnets
+      DBSubnetGroupDescription: aws-asm3 donation RDS subnets
+      SubnetIds: !Ref SubnetIds
+      Tags:
+        - Key: Project
+          Value: aws-asm3
+        - Key: Name
+          Value: !Sub ${ProjectPrefix}-db-subnets
+        - Key: Assignment
+          Value: COSC29800-A3
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub ${ProjectPrefix}-postgres
+      DBName: donation
+      Engine: postgres
+      EngineVersion: "16.15"
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: 20
+      StorageType: gp2
+      MasterUsername: !Ref DbUsername
+      MasterUserPassword: !Ref DbPassword
+      PubliclyAccessible: true
+      VPCSecurityGroups:
+        - !GetAtt DbSecurityGroup.GroupId
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      BackupRetentionPeriod: 1
+      DeletionProtection: false
+      Tags:
+        - Key: Project
+          Value: aws-asm3
+        - Key: Name
+          Value: !Sub ${ProjectPrefix}-postgres
+        - Key: Assignment
+          Value: COSC29800-A3
+
+  DbPasswordParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /${ProjectPrefix}/rds/master-password
+      Type: String
+      Value: !Ref DbPassword
+      Tags:
+        Project: aws-asm3
+        Name: !Sub ${ProjectPrefix}-rds-password
+        Assignment: COSC29800-A3
+
+  ApiFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${ProjectPrefix}-api
+      Description: Donation API placeholder — replaced by GitHub Actions .NET package
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !Ref LabRoleArn
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          RECEIPTS_BUCKET: !Ref ReceiptsBucket
+          ANALYTICS_BUCKET: !Ref AnalyticsBucket
+          PROJECT: aws-asm3
+      Code:
+        ZipFile: |
+          import json
+          import os
+
+          def handler(event, context):
+              body = {
+                  "service": "aws-asm3-api",
+                  "status": "ok",
+                  "message": "Donation API placeholder. Deploy .NET package via GitHub Actions.",
+                  "receiptsBucket": os.environ.get("RECEIPTS_BUCKET"),
+                  "path": event.get("rawPath") or event.get("path"),
+              }
+              return {
+                  "statusCode": 200,
+                  "headers": {"content-type": "application/json"},
+                  "body": json.dumps(body),
+              }
+      Tags:
+        - Key: Project
+          Value: aws-asm3
+        - Key: Name
+          Value: !Sub ${ProjectPrefix}-api
+        - Key: Assignment
+          Value: COSC29800-A3
+
+  OutboxFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${ProjectPrefix}-outbox-worker
+      Description: Outbox / async donation worker placeholder
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !Ref LabRoleArn
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          RECEIPTS_BUCKET: !Ref ReceiptsBucket
+          PROJECT: aws-asm3
+      Code:
+        ZipFile: |
+          import json
+          import os
+
+          def handler(event, context):
+              return {
+                  "statusCode": 200,
+                  "body": json.dumps({
+                      "service": "aws-asm3-outbox-worker",
+                      "status": "ok",
+                      "receiptsBucket": os.environ.get("RECEIPTS_BUCKET"),
+                  }),
+              }
+      Tags:
+        - Key: Project
+          Value: aws-asm3
+        - Key: Name
+          Value: !Sub ${ProjectPrefix}-outbox-worker
+        - Key: Assignment
+          Value: COSC29800-A3
+
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub ${ProjectPrefix}-http-api
+      ProtocolType: HTTP
+      Description: Donation HTTP API edge
+      CorsConfiguration:
+        AllowHeaders:
+          - "*"
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        AllowOrigins:
+          - "*"
+      Tags:
+        Project: aws-asm3
+        Name: !Sub ${ProjectPrefix}-http-api
+        Assignment: COSC29800-A3
+
+  ApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt ApiFunction.Arn
+      PayloadFormatVersion: "2.0"
+      IntegrationMethod: POST
+
+  ApiDefaultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "$default"
+      Target: !Sub integrations/${ApiIntegration}
+
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: "$default"
+      AutoDeploy: true
+      Tags:
+        Project: aws-asm3
+        Name: !Sub ${ProjectPrefix}-http-api-stage
+        Assignment: COSC29800-A3
+
+  ApiInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ApiFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
+
+  EbApplication:
+    Type: AWS::ElasticBeanstalk::Application
+    Properties:
+      ApplicationName: !Sub ${ProjectPrefix}-donation-ui
+      Description: Hope & Help donor + admin Blazor hosts
+      Tags:
+        - Key: Project
+          Value: aws-asm3
+        - Key: Name
+          Value: !Sub ${ProjectPrefix}-donation-ui
+        - Key: Assignment
+          Value: COSC29800-A3
+
+  EbEnvironment:
+    Type: AWS::ElasticBeanstalk::Environment
+    DependsOn: DeployBucket
+    Properties:
+      ApplicationName: !Ref EbApplication
+      EnvironmentName: !Sub ${ProjectPrefix}-ui-env
+      Description: Blazor UI environment (deploy via GitHub Actions)
+      SolutionStackName: 64bit Amazon Linux 2023 v3.11.6 running .NET 10
+      OptionSettings:
+        - Namespace: aws:autoscaling:launchconfiguration
+          OptionName: IamInstanceProfile
+          Value: !Ref LabInstanceProfileName
+        - Namespace: aws:autoscaling:launchconfiguration
+          OptionName: InstanceType
+          Value: t3.small
+        - Namespace: aws:autoscaling:launchconfiguration
+          OptionName: SecurityGroups
+          Value: !Ref EbSecurityGroup
+        - Namespace: aws:elasticbeanstalk:environment
+          OptionName: EnvironmentType
+          Value: SingleInstance
+        - Namespace: aws:elasticbeanstalk:environment
+          OptionName: ServiceRole
+          Value: LabRole
+        - Namespace: aws:ec2:vpc
+          OptionName: VPCId
+          Value: !Ref VpcId
+        - Namespace: aws:ec2:vpc
+          OptionName: Subnets
+          Value: !Join
+            - ","
+            - !Ref SubnetIds
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: PROJECT
+          Value: aws-asm3
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: ObjectStorage__BucketName
+          Value: !Ref ReceiptsBucket
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: ObjectStorage__Region
+          Value: !Ref AWS::Region
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: ASPNETCORE_ENVIRONMENT
+          Value: Production
+      Tags:
+        - Key: Project
+          Value: aws-asm3
+        - Key: Name
+          Value: !Sub ${ProjectPrefix}-ui-env
+        - Key: Assignment
+          Value: COSC29800-A3
+
+  AthenaWorkGroup:
+    Type: AWS::Athena::WorkGroup
+    Properties:
+      Name: !Sub ${ProjectPrefix}-analytics
+      Description: Donation analytics queries over S3 exports
+      State: ENABLED
+      WorkGroupConfiguration:
+        ResultConfiguration:
+          OutputLocation: !Sub s3://${AnalyticsBucket}/athena-results/
+        EnforceWorkGroupConfiguration: true
+      Tags:
+        - Key: Project
+          Value: aws-asm3
+        - Key: Name
+          Value: !Sub ${ProjectPrefix}-analytics
+        - Key: Assignment
+          Value: COSC29800-A3
+
+  GlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: aws_asm3_donation
+        Description: Glue catalog for aws-asm3 Athena
+
+  ResourceGroup:
+    Type: AWS::ResourceGroups::Group
+    Properties:
+      Name: !Sub ${ProjectPrefix}-donation
+      Description: All aws-asm3 tagged resources for COSC29800 A3
+      ResourceQuery:
+        Type: TAG_FILTERS_1_0
+        Query:
+          ResourceTypeFilters:
+            - AWS::AllSupported
+          TagFilters:
+            - Key: Project
+              Values:
+                - aws-asm3
+      Tags:
+        Project: aws-asm3
+        Name: !Sub ${ProjectPrefix}-donation
+        Assignment: COSC29800-A3
+
+Outputs:
+  StackName:
+    Value: !Ref AWS::StackName
+  ResourceGroupName:
+    Value: !Ref ResourceGroup
+  ReceiptsBucketName:
+    Value: !Ref ReceiptsBucket
+    Export:
+      Name: !Sub ${ProjectPrefix}-receipts-bucket
+  DeployBucketName:
+    Value: !Ref DeployBucket
+    Export:
+      Name: !Sub ${ProjectPrefix}-deploy-bucket
+  AnalyticsBucketName:
+    Value: !Ref AnalyticsBucket
+  DatabaseEndpoint:
+    Value: !GetAtt Database.Endpoint.Address
+    Export:
+      Name: !Sub ${ProjectPrefix}-rds-endpoint
+  DatabasePort:
+    Value: !GetAtt Database.Endpoint.Port
+  DatabaseName:
+    Value: donation
+  DatabaseUsername:
+    Value: !Ref DbUsername
+  ApiFunctionName:
+    Value: !Ref ApiFunction
+  OutboxFunctionName:
+    Value: !Ref OutboxFunction
+  HttpApiUrl:
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com
+    Export:
+      Name: !Sub ${ProjectPrefix}-http-api-url
+  EbApplicationName:
+    Value: !Ref EbApplication
+  EbEnvironmentName:
+    Value: !Ref EbEnvironment
+  EbEnvironmentUrl:
+    Value: !GetAtt EbEnvironment.EndpointURL
+  AthenaWorkGroupName:
+    Value: !Ref AthenaWorkGroup
+  GlueDatabaseName:
+    Value: !Ref GlueDatabase
+  ProjectTag:
+    Value: aws-asm3

@@ -1,0 +1,32 @@
+name: .NET
+
+on:
+  push:
+    branches: [develop, staging, master, main]
+  pull_request:
+    branches: [develop, staging, master, main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: 10.0.x
+
+
+      - name: Install dependencies
+        run: dotnet restore
+        working-directory:  src
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore NetCore.Donation.slnx
+        working-directory:  src
+
+      - name: Test
+        run: dotnet test --no-restore --verbosity normal
+        working-directory:  src

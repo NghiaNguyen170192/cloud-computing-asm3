@@ -1,0 +1,147 @@
+@page "/donate/thanks"
+@inject DonationApiClient Api
+@inject IJSRuntime JS
+
+<PageTitle>Thank you — Hope &amp; Help</PageTitle>
+
+<div class="card-panel">
+    <h1>Thank you</h1>
+    <p>
+        Your simulated @(isRecurring ? "recurring" : "one-time") donation has been recorded.
+        @if (isRecurring)
+        {
+            <text>A payment schedule was created; the first transaction, journal, and receipt follow if payment succeeds.</text>
+        }
+        else
+        {
+            <text>This gift is a single transaction; a journal line and receipt follow if payment succeeds.</text>
+        }
+    </p>
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="alert alert-danger">@error</div>
+    }
+
+    <dl class="row">
+        <dt class="col-sm-3">Gift type</dt>
+        <dd class="col-sm-9">@(isRecurring ? "Recurring" : "One-time")</dd>
+        @if (paymentScheduleId != Guid.Empty)
+        {
+            <dt class="col-sm-3">Schedule</dt>
+            <dd class="col-sm-9"><code>@paymentScheduleId</code></dd>
+        }
+        @if (transactionId != Guid.Empty)
+        {
+            <dt class="col-sm-3">Transaction</dt>
+            <dd class="col-sm-9"><code>@transactionId</code></dd>
+        }
+        @if (receiptId != Guid.Empty)
+        {
+            <dt class="col-sm-3">Receipt</dt>
+            <dd class="col-sm-9"><code>@receiptId</code></dd>
+        }
+    </dl>
+
+    @if (receiptId != Guid.Empty)
+    {
+        <button class="btn btn-give" type="button" disabled="@busy" @onclick="DownloadReceiptAsync">
+            @(busy ? "Preparing PDF…" : "Download receipt PDF")
+        </button>
+    }
+    <a class="btn btn-outline-secondary @(receiptId != Guid.Empty ? "ms-2" : null)" href="gifts">View my gifts</a>
+</div>
+
+@code {
+    [SupplyParameterFromQuery]
+    public Guid ContactId { get; set; }
+
+    [SupplyParameterFromQuery]
+    public Guid PaymentScheduleId { get; set; }
+
+    [SupplyParameterFromQuery]
+    public bool IsRecurring { get; set; }
+
+    [SupplyParameterFromQuery]
+    public Guid ReceiptId { get; set; }
+
+    [SupplyParameterFromQuery]
+    public Guid TransactionId { get; set; }
+
+    private Guid paymentScheduleId;
+    private Guid receiptId;
+    private Guid transactionId;
+    private bool isRecurring;
+    private bool busy;
+    private string? error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        paymentScheduleId = PaymentScheduleId;
+        isRecurring = IsRecurring;
+        transactionId = TransactionId;
+        receiptId = ReceiptId;
+
+        if (receiptId == Guid.Empty &&
+            (transactionId != Guid.Empty || paymentScheduleId != Guid.Empty || ContactId != Guid.Empty))
+        {
+            try
+            {
+                if (transactionId == Guid.Empty)
+                {
+                    var transactions = paymentScheduleId != Guid.Empty
+                        ? await Api.GetTransactionsAsync(paymentScheduleId: paymentScheduleId)
+                        : await Api.GetTransactionsAsync(contactId: ContactId);
+                    var transaction = transactions.FirstOrDefault();
+                    if (transaction is not null)
+                    {
+                        transactionId = transaction.Id;
+                        if (ContactId == Guid.Empty)
+                        {
+                            ContactId = transaction.ContactId;
+                        }
+                    }
+                }
+
+                if (transactionId != Guid.Empty)
+                {
+                    var receipts = await Api.GetReceiptsAsync(ContactId);
+                    var receipt = receipts.FirstOrDefault(item => item.TransactionId == transactionId);
+                    if (receipt is not null)
+                    {
+                        receiptId = receipt.Id;
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                error = exception.Message;
+            }
+        }
+    }
+
+    private async Task DownloadReceiptAsync()
+    {
+        if (receiptId == Guid.Empty)
+        {
+            error = "No receipt was returned for this gift yet. Check My gifts in a moment.";
+            return;
+        }
+
+        error = null;
+        busy = true;
+        try
+        {
+            var pdf = await Api.GetReceiptPdfAsync(receiptId);
+            await JS.InvokeVoidAsync("downloadFile", $"receipt-{receiptId:N}.pdf", "application/pdf", pdf);
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

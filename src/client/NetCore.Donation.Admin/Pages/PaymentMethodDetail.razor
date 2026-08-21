@@ -1,0 +1,62 @@
+@page "/payment-methods/{Id:guid}"
+@inject DonationApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Payment method — Donation admin</PageTitle>
+
+<div class="d-flex align-items-center gap-3 mb-3">
+    <h1 class="mb-0">Payment method</h1>
+    <RadzenButton Text="Back to list" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@(() => Nav.NavigateTo("payment-methods"))" />
+</div>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+else if (loading)
+{
+    <p>Loading…</p>
+}
+else if (item is null)
+{
+    <p class="text-muted">Payment method not found.</p>
+}
+else
+{
+    <div class="detail-card">
+        <DetailGrid>
+            <DetailField Label="Display name">@item.DisplayName</DetailField>
+            <DetailField Label="Payment type">@item.PaymentType</DetailField>
+            <DetailField Label="Contact">
+                <EntityLink Path="contacts" Id="item.ContactId" Text="@item.ContactFullName" />
+            </DetailField>
+        </DetailGrid>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private bool loading = true;
+    private string? error;
+    private PaymentMethodDto? item;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        try
+        {
+            item = await Api.GetPaymentMethodAsync(Id);
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+            item = null;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

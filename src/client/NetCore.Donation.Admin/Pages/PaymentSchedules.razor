@@ -1,0 +1,91 @@
+@page "/payment-schedules"
+@inject DonationApiClient Api
+
+<PageTitle>Payment schedules — Donation admin</PageTitle>
+
+<h1>Payment schedules</h1>
+<p class="text-muted">Recurring donation schedules. Filter with OData <code>$select</code>, <code>$filter</code>, and <code>$top</code>.</p>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+<RadzenStack Gap="1rem" class="list-page">
+    <FilterToolbar @bind-Auto="@auto" Apply="@ApplyFilter" />
+
+    <RadzenDataFilter @ref="dataFilter" Auto="@auto" TItem="PaymentScheduleDto" ViewChanged="@(_ => grid.Reload())">
+        <Properties>
+            <RadzenDataFilterProperty Property="@nameof(PaymentScheduleDto.Identifier)" Title="Identifier" />
+            <RadzenDataFilterProperty Property="@nameof(PaymentScheduleDto.Amount)" Title="Amount" />
+            <RadzenDataFilterProperty Property="@nameof(PaymentScheduleDto.PaymentType)" Title="Payment type" />
+            <RadzenDataFilterProperty Property="@nameof(PaymentScheduleDto.BookDate)" Title="Book date" />
+            <RadzenDataFilterProperty Property="@nameof(PaymentScheduleDto.IsRecurring)" Title="Recurring" />
+            <RadzenDataFilterProperty Property="@nameof(PaymentScheduleDto.RecurringInterval)" Title="Interval" />
+            <RadzenDataFilterProperty Property="@nameof(PaymentScheduleDto.ContactFullName)" Title="Contact" />
+            <RadzenDataFilterProperty Property="@nameof(PaymentScheduleDto.PaymentMethodDisplayName)" Title="Method" />
+        </Properties>
+    </RadzenDataFilter>
+
+    <RadzenDataGrid @ref="grid" TItem="PaymentScheduleDto" Data="@items" Count="@count" LoadData="@LoadData"
+                    IsLoading="@loading" AllowPaging="true" AllowSorting="true" PageSize="20"
+                    PagerHorizontalAlign="HorizontalAlign.Left" class="admin-data-grid">
+        <Columns>
+            <RadzenDataGridColumn Property="@nameof(PaymentScheduleDto.Identifier)" Title="Schedule">
+                <Template Context="schedule">
+                    <EntityLink Path="payment-schedules" Id="schedule.Id" Text="@RadzenODataQuery.IdentifierOrShort(schedule.Identifier, schedule.Id)" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Property="@nameof(PaymentScheduleDto.BookDate)" Title="Book date" />
+            <RadzenDataGridColumn Property="@nameof(PaymentScheduleDto.Amount)" Title="Amount" FormatString="{0:C}" />
+            <RadzenDataGridColumn Property="@nameof(PaymentScheduleDto.PaymentType)" Title="Type" />
+            <RadzenDataGridColumn Property="@nameof(PaymentScheduleDto.IsRecurring)" Title="Recurring" />
+            <RadzenDataGridColumn Property="@nameof(PaymentScheduleDto.RecurringInterval)" Title="Interval" />
+            <RadzenDataGridColumn Property="@nameof(PaymentScheduleDto.ContactFullName)" Title="Contact">
+                <Template Context="schedule">
+                    <EntityLink Path="contacts" Id="schedule.ContactId" Text="@schedule.ContactFullName" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Property="@nameof(PaymentScheduleDto.PaymentMethodDisplayName)" Title="Method">
+                <Template Context="schedule">
+                    <EntityLink Path="payment-methods" Id="schedule.PaymentMethodId" Text="@schedule.PaymentMethodDisplayName" />
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenStack>
+
+@code {
+    private const string Select = "Id,Identifier,ContactId,ContactFullName,PaymentMethodId,PaymentMethodDisplayName,Amount,BookDate,PaymentType,RecurringInterval,IsRecurring";
+    private bool auto = true;
+    private bool loading;
+    private string? error;
+    private int count;
+    private IEnumerable<PaymentScheduleDto> items = [];
+    private RadzenDataFilter<PaymentScheduleDto> dataFilter = default!;
+    private RadzenDataGrid<PaymentScheduleDto> grid = default!;
+
+    private async Task ApplyFilter() => await dataFilter.Filter();
+
+    private async Task LoadData(LoadDataArgs args)
+    {
+        loading = true;
+        try
+        {
+            var result = await Api.QueryPaymentSchedulesAsync(RadzenODataQuery.From(args, dataFilter, Select));
+            items = result.Value;
+            count = result.Count;
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+            items = [];
+            count = 0;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

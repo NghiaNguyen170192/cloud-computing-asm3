@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+	<TargetFramework>net10.0</TargetFramework>
+	<Nullable>enable</Nullable>
+	<ImplicitUsings>enable</ImplicitUsings>
+	<!-- Disable SDK-generated assembly attributes because this project includes shared source files
+		 which already define assembly attributes, causing duplicate attribute compilation errors. -->
+	<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+	<!-- The SDK also generates a TargetFrameworkAttribute; disable that as well to avoid
+		 duplicate TargetFrameworkAttribute when including external source files. -->
+	<GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+	<IsAspireSharedProject>true</IsAspireSharedProject>
+	<OutputType>Library</OutputType>
+	<EnableDefaultContentItems>false</EnableDefaultContentItems>
+  </PropertyGroup>
+
+  <!-- Shared configuration files -->
+  <ItemGroup>
+	<!-- Embed as resources for Docker/Production scenarios (source files live under client/NetCore.Donation/NetCore.Donation.ServiceDefaults) -->
+	<EmbeddedResource Include="..\client\NetCore.Donation\NetCore.Donation.ServiceDefaults\appsettings.json" />
+	<EmbeddedResource Include="..\client\NetCore.Donation\NetCore.Donation.ServiceDefaults\appsettings.*.json" />
+  </ItemGroup>
+
+  <!-- Dependencies (versions controlled centrally) -->
+  <ItemGroup>
+	<PackageReference Include="Microsoft.AspNetCore.OData" />
+	<PackageReference Include="Microsoft.OpenApi" />
+	<PackageReference Include="Swashbuckle.AspNetCore" />
+	<PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+	<PackageReference Include="Microsoft.Extensions.ServiceDiscovery" />
+	<PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+	<PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+	<PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+	<PackageReference Include="OpenTelemetry.Instrumentation.GrpcNetClient" />
+	<PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+	<PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
+  </ItemGroup>
+
+  <!-- Include implementation source files from client location so code is compiled from a single centralized project -->
+	<ItemGroup>
+	<!-- Include implementation source files from client location but exclude compiled/generated
+		 obj and bin folders to avoid pulling in generated assembly info and other build artifacts. -->
+	<Compile Include="..\client\NetCore.Donation\NetCore.Donation.ServiceDefaults\**\*.cs"
+			 Exclude="..\client\NetCore.Donation\NetCore.Donation.ServiceDefaults\obj\**\*.cs;..\client\NetCore.Donation\NetCore.Donation.ServiceDefaults\bin\**\*.cs;**\obj\**\*.cs;**\bin\**\*.cs" />
+  </ItemGroup>
+
+</Project>

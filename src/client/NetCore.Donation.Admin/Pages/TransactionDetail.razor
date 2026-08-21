@@ -1,0 +1,72 @@
+@page "/transactions/{Id:guid}"
+@inject DonationApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Transaction — Donation admin</PageTitle>
+
+<div class="d-flex align-items-center gap-3 mb-3">
+    <h1 class="mb-0">Transaction</h1>
+    <RadzenButton Text="Back to list" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@(() => Nav.NavigateTo("transactions"))" />
+</div>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+else if (loading)
+{
+    <p>Loading…</p>
+}
+else if (item is null)
+{
+    <p class="text-muted">Transaction not found.</p>
+}
+else
+{
+    <div class="detail-card">
+        <DetailGrid>
+            <DetailField Label="Identifier">@RadzenODataQuery.IdentifierOrShort(item.Identifier, item.Id)</DetailField>
+            <DetailField Label="Amount">@item.Amount.ToString("C")</DetailField>
+            <DetailField Label="Type">@item.PaymentType</DetailField>
+            <DetailField Label="Status">@item.Status</DetailField>
+            <DetailField Label="Book date">@item.BookDate</DetailField>
+            <DetailField Label="Received date">@item.ReceivedDate</DetailField>
+            <DetailField Label="Contact">
+                <EntityLink Path="contacts" Id="item.ContactId" Text="@item.ContactFullName" />
+            </DetailField>
+            <DetailField Label="Payment schedule">
+                <EntityLink Path="payment-schedules" Id="item.PaymentScheduleId" Text="@RadzenODataQuery.IdentifierOrShort(item.PaymentScheduleIdentifier, item.PaymentScheduleId)" />
+            </DetailField>
+            <DetailField Label="Payment method">
+                <EntityLink Path="payment-methods" Id="item.PaymentMethodId" Text="@item.PaymentMethodDisplayName" />
+            </DetailField>
+        </DetailGrid>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private bool loading = true;
+    private string? error;
+    private TransactionDto? item;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        try
+        {
+            item = await Api.GetTransactionAsync(Id);
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+            item = null;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

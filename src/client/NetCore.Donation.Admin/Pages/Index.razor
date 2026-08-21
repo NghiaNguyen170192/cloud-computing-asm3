@@ -1,0 +1,120 @@
+@page "/"
+@inject DonationApiClient Api
+
+<PageTitle>Overview — Donation admin</PageTitle>
+
+<h1>Overview</h1>
+<p class="text-muted">Live totals from the donation API using OData <code>$count</code> / <code>$select</code> / <code>$top</code>. Auth is not enabled.</p>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+else if (loading)
+{
+    <p>Loading…</p>
+}
+else
+{
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="text-muted">Contacts</div>
+                <div class="value">@contactCount</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="text-muted">Payment schedules</div>
+                <div class="value">@scheduleCount</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="text-muted">Transactions</div>
+                <div class="value">@transactionCount</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="text-muted">Total gifted</div>
+                <div class="value">@gifted.ToString("C")</div>
+            </div>
+        </div>
+    </div>
+
+    <h2 class="h5">Recent transactions</h2>
+    <div class="table-wrap">
+        <table class="table mb-0">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Transaction</th>
+                    <th>Amount</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Contact</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var transaction in recent)
+                {
+                    <tr>
+                        <td>@transaction.BookDate</td>
+                        <td>
+                            <EntityLink Path="transactions" Id="transaction.Id" Text="@RadzenODataQuery.IdentifierOrShort(transaction.Identifier, transaction.Id)" />
+                        </td>
+                        <td>@transaction.Amount.ToString("C")</td>
+                        <td>@transaction.PaymentType</td>
+                        <td>@transaction.Status</td>
+                        <td>
+                            <EntityLink Path="contacts" Id="transaction.ContactId" Text="@transaction.ContactFullName" />
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private bool loading = true;
+    private string? error;
+    private int contactCount;
+    private int scheduleCount;
+    private int transactionCount;
+    private decimal gifted;
+    private IReadOnlyList<TransactionDto> recent = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var contacts = await Api.QueryContactsAsync(new ODataListRequest { Select = "Id", Top = 1, Count = true });
+            var schedules = await Api.QueryPaymentSchedulesAsync(new ODataListRequest { Select = "Id", Top = 1, Count = true });
+            var transactions = await Api.QueryTransactionsAsync(new ODataListRequest
+            {
+                Select = "Id,Identifier,Amount,PaymentType,Status,BookDate,ContactId,ContactFullName",
+                OrderBy = "BookDate desc",
+                Top = 1000,
+                Count = true,
+            });
+
+            contactCount = contacts.Count;
+            scheduleCount = schedules.Count;
+            transactionCount = transactions.Count;
+            gifted = transactions.Value
+                .Where(item => item.Status == TransactionStatus.Succeeded)
+                .Sum(item => item.Amount);
+            recent = transactions.Value.Take(10).ToList();
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

@@ -1,0 +1,8 @@
+<dt>@Label</dt>
+<dd>@ChildContent</dd>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

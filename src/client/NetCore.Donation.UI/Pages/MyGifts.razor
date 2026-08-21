@@ -1,0 +1,133 @@
+@page "/gifts"
+@inject DonationApiClient Api
+@inject IJSRuntime JS
+
+<PageTitle>My gifts — Hope &amp; Help</PageTitle>
+
+<h1>My gifts</h1>
+<p class="text-muted">Look up recorded gifts with the email used on the donation form. No login is required yet.</p>
+
+<div class="card-panel mb-4">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-8">
+            <label class="form-label">Email</label>
+            <input class="form-control" @bind="email" />
+        </div>
+        <div class="col-md-4">
+            <button class="btn btn-give" type="button" disabled="@busy" @onclick="SearchAsync">Find gifts</button>
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+@if (contact is not null)
+{
+    <p>
+        <strong>@contact.FirstName @contact.LastName</strong>
+        @if (contact.DoNotEmail || contact.DoNotSms)
+        {
+            <span class="text-muted">
+                (@(contact.DoNotEmail ? "no email" : null)
+                @(contact.DoNotSms ? "no SMS" : null))
+            </span>
+        }
+    </p>
+}
+
+@if (transactions.Count > 0)
+{
+    <div class="table-responsive card-panel p-0">
+        <table class="table mb-0">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Amount</th>
+                    <th>Type</th>
+                    <th>Receipt</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var gift in gifts)
+                {
+                    <tr>
+                        <td>@gift.Transaction.BookDate</td>
+                        <td>@gift.Transaction.Amount.ToString("C")</td>
+                        <td>@gift.Transaction.PaymentType</td>
+                        <td>
+                            @if (gift.Receipt is { HasDocument: true })
+                            {
+                                <button class="btn btn-sm btn-outline-success" type="button" @onclick="() => DownloadAsync(gift.Receipt.Id)">
+                                    PDF
+                                </button>
+                            }
+                            else
+                            {
+                                <span class="text-muted">None</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else if (searched)
+{
+    <p>No gifts found for that email.</p>
+}
+
+@code {
+    private string email = string.Empty;
+    private bool busy;
+    private bool searched;
+    private string? error;
+    private ContactDto? contact;
+    private IReadOnlyList<TransactionDto> transactions = [];
+    private IReadOnlyList<GiftRow> gifts = [];
+
+    private async Task SearchAsync()
+    {
+        error = null;
+        busy = true;
+        searched = true;
+        try
+        {
+            contact = (await Api.GetContactsAsync())
+                .FirstOrDefault(item => item.Email.Equals(email.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (contact is null)
+            {
+                transactions = [];
+                gifts = [];
+                return;
+            }
+
+            transactions = await Api.GetTransactionsAsync(contact.Id);
+            var receipts = await Api.GetReceiptsAsync(contact.Id);
+            gifts = transactions
+                .Select(transaction => new GiftRow(
+                    transaction,
+                    receipts.FirstOrDefault(receipt => receipt.TransactionId == transaction.Id)))
+                .ToList();
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task DownloadAsync(Guid receiptId)
+    {
+        var pdf = await Api.GetReceiptPdfAsync(receiptId);
+        await JS.InvokeVoidAsync("downloadFile", $"receipt-{receiptId:N}.pdf", "application/pdf", pdf);
+    }
+
+    private sealed record GiftRow(TransactionDto Transaction, ReceiptDto? Receipt);
+}

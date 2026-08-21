@@ -1,0 +1,63 @@
+@page "/journals/{Id:guid}"
+@inject DonationApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Journal — Donation admin</PageTitle>
+
+<div class="d-flex align-items-center gap-3 mb-3">
+    <h1 class="mb-0">Journal</h1>
+    <RadzenButton Text="Back to list" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@(() => Nav.NavigateTo("journals"))" />
+</div>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+else if (loading)
+{
+    <p>Loading…</p>
+}
+else if (item is null)
+{
+    <p class="text-muted">Journal not found.</p>
+}
+else
+{
+    <div class="detail-card">
+        <DetailGrid>
+            <DetailField Label="Identifier">@RadzenODataQuery.IdentifierOrShort(item.Identifier, item.Id)</DetailField>
+            <DetailField Label="Created (UTC)">@item.CreatedDate.ToString("u")</DetailField>
+            <DetailField Label="Modified (UTC)">@item.ModifiedDate.ToString("u")</DetailField>
+            <DetailField Label="Transaction">
+                <EntityLink Path="transactions" Id="item.TransactionId" Text="@RadzenODataQuery.IdentifierOrShort(item.TransactionIdentifier, item.TransactionId)" />
+            </DetailField>
+        </DetailGrid>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private bool loading = true;
+    private string? error;
+    private JournalDto? item;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        try
+        {
+            item = await Api.GetJournalAsync(Id);
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+            item = null;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

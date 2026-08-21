@@ -1,0 +1,13 @@
+{
+  "profiles": {
+    "NetCore.Donation.Admin": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "dotnetRunMessages": true,
+      "applicationUrl": "https://localhost:6021;http://localhost:6020"
+    }
+  }
+}

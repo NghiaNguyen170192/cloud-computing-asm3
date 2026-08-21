@@ -1,0 +1,43 @@
+.navbar-toggler {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.top-row {
+    height: 3.5rem;
+    background-color: rgba(0, 0, 0, 0.35);
+}
+
+.navbar-brand {
+    font-size: 1.05rem;
+}
+
+.nav-item {
+    font-size: 0.95rem;
+    padding-bottom: 0.35rem;
+}
+
+.nav-item ::deep a {
+    color: #cbd5e1;
+    border-radius: 4px;
+    height: 2.6rem;
+    display: flex;
+    align-items: center;
+    padding-left: 0.75rem;
+    text-decoration: none;
+}
+
+.nav-item ::deep a.active,
+.nav-item ::deep a:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+@media (min-width: 641px) {
+    .navbar-toggler {
+        display: none;
+    }
+
+    .collapse {
+        display: block;
+    }
+}

@@ -1,0 +1,211 @@
+using Bogus;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using NetCore.Donation.Application.Donation.QueryDonationFlows;
+using NetCore.Donation.Application.Donation.UserMakesDonation;
+using NetCore.Donation.Application.Outbox.Process;
+using NetCore.Donation.Domain.Enums;
+using NetCore.Donation.Domain.IRepositories;
+using NetCore.Donation.Infrastructure.Database;
+using NetCore.Donation.Migration.Common.Interface;
+
+namespace NetCore.Donation.Migration.Seeds.Base;
+
+public sealed class DonationSeed(
+    ISender dispatcher,
+    ApplicationDatabaseContext context,
+    ICountryRepository countryRepository,
+    ILogger<DonationSeed> logger) : IDataSeed
+{
+    private const int RecordCount = 5000;
+    private const int Seed = 20260817;
+    private const float RecurringShare = 0.3f;
+
+    public IEnumerable<Type> Dependencies => [typeof(CountrySeed)];
+
+    public async Task SeedAsync()
+    {
+        var existing = await context.Contacts.CountAsync();
+        if (existing >= RecordCount)
+        {
+            logger.LogInformation("Skipping donation seed; {Count} contacts already exist.", existing);
+            return;
+        }
+
+        var countryIds = await countryRepository.GetAll()
+            .Select(country => country.Id)
+            .ToListAsync();
+        if (countryIds.Count == 0)
+        {
+            throw new InvalidOperationException("Countries must be seeded before donation data.");
+        }
+
+        var remaining = RecordCount - existing;
+        logger.LogInformation(
+            "Seeding {Remaining} donations through the application layer ({Existing} contacts already present).",
+            remaining,
+            existing);
+
+        var faker = new Faker("en_AU") { Random = new Randomizer(Seed + existing) };
+        var recurringIntervals = Enum.GetValues<RecurringInterval>()
+            .Where(interval => interval != RecurringInterval.OneOff)
+            .ToArray();
+        var paymentTypes = Enum.GetValues<PaymentType>();
+        var genders = Enum.GetValues<Gender>();
+        var brands = new[] { "Visa", "Mastercard", "Bank account", "PayPal" };
+        var now = DateTime.UtcNow;
+        var earliest = now.AddYears(-5);
+
+        for (var index = 0; index < remaining; index++)
+        {
+            var firstName = faker.Name.FirstName();
+            var lastName = faker.Name.LastName();
+            var isRecurring = faker.Random.Bool(RecurringShare);
+            var paymentType = faker.PickRandom(paymentTypes);
+            var occurredAtUtc = DateTime.SpecifyKind(faker.Date.Between(earliest, now), DateTimeKind.Utc);
+            var bookDate = DateOnly.FromDateTime(occurredAtUtc);
+            var receivedDate = bookDate.AddDays(faker.Random.Int(0, 14));
+            var today = DateOnly.FromDateTime(now);
+            if (receivedDate > today)
+            {
+                receivedDate = today;
+            }
+
+            var batchStarted = DateTime.UtcNow.AddSeconds(-2);
+            var result = await dispatcher.Send(new UserMakesDonationCommand(
+                firstName,
+                lastName,
+                DateOnly.FromDateTime(faker.Date.Past(50, DateTime.UtcNow.AddYears(-21))),
+                faker.Address.StreetAddress(),
+                EmailFor(firstName, lastName, existing + index + 1),
+                faker.Random.Replace("+614########"),
+                faker.PickRandom(countryIds),
+                decimal.Round(faker.Finance.Amount(5, 2500), 2),
+                $"{faker.PickRandom(brands)} {faker.Random.Replace("****")}",
+                paymentType,
+                isRecurring,
+                isRecurring ? faker.PickRandom(recurringIntervals) : RecurringInterval.OneOff,
+                faker.PickRandom(genders),
+                faker.Random.Bool(0.2f),
+                faker.Random.Bool(0.2f),
+                bookDate));
+
+            context.ChangeTracker.Clear();
+            await DrainOutboxAsync();
+            await BackdateGiftAsync(result, occurredAtUtc, receivedDate, batchStarted);
+            context.ChangeTracker.Clear();
+
+            if ((index + 1) % 10 == 0)
+            {
+                logger.LogInformation("Seeded {Inserted}/{Total} donations.", index + 1, remaining);
+            }
+        }
+
+        await DrainOutboxAsync();
+        logger.LogInformation("Finished donation seed for {Count} gifts, including outbox money-flow events.", remaining);
+    }
+
+    private async Task BackdateGiftAsync(
+        UserMakesDonationResult result,
+        DateTime occurredAtUtc,
+        DateOnly receivedDate,
+        DateTime batchStartedUtc)
+    {
+        await context.Contacts
+            .Where(contact => contact.Id == result.ContactId)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(contact => contact.CreatedDate, occurredAtUtc)
+                .SetProperty(contact => contact.ModifiedDate, occurredAtUtc));
+
+        await context.PaymentMethods
+            .Where(method => method.Id == result.PaymentMethodId)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(method => method.CreatedDate, occurredAtUtc)
+                .SetProperty(method => method.ModifiedDate, occurredAtUtc));
+
+        if (result.PaymentScheduleId is { } scheduleId)
+        {
+            await context.PaymentSchedules
+                .Where(schedule => schedule.Id == scheduleId)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(schedule => schedule.CreatedDate, occurredAtUtc)
+                    .SetProperty(schedule => schedule.ModifiedDate, occurredAtUtc));
+        }
+
+        var transactionId = result.TransactionId
+            ?? await context.Transactions
+                .Where(transaction => transaction.PaymentScheduleId == result.PaymentScheduleId)
+                .Select(transaction => (Guid?)transaction.Id)
+                .FirstOrDefaultAsync();
+
+        if (transactionId is { } txnId && txnId != Guid.Empty)
+        {
+            await context.Transactions
+                .Where(transaction => transaction.Id == txnId)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(transaction => transaction.CreatedDate, occurredAtUtc)
+                    .SetProperty(transaction => transaction.ModifiedDate, occurredAtUtc)
+                    .SetProperty(transaction => transaction.ReceivedDate, receivedDate));
+
+            await context.Journals
+                .Where(journal => journal.TransactionId == txnId)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(journal => journal.CreatedDate, occurredAtUtc)
+                    .SetProperty(journal => journal.ModifiedDate, occurredAtUtc));
+
+            await context.Receipts
+                .Where(receipt => receipt.TransactionId == txnId)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(receipt => receipt.CreatedDate, occurredAtUtc)
+                    .SetProperty(receipt => receipt.ModifiedDate, occurredAtUtc)
+                    .SetProperty(receipt => receipt.DocumentGeneratedAtUtc, occurredAtUtc));
+        }
+
+        var batch = await context.OutboxMessages
+            .Where(message => message.OccurredAtUtc >= batchStartedUtc)
+            .Select(message => new { message.Id, message.MessageType, message.OccurredAtUtc })
+            .ToListAsync();
+
+        var ordered = batch
+            .OrderBy(message => DonationFlowAssembler.CanonicalSequence(DonationFlowAssembler.ToEventName(message.MessageType)))
+            .ThenBy(message => message.OccurredAtUtc)
+            .ThenBy(message => message.Id)
+            .ToList();
+
+        for (var offset = 0; offset < ordered.Count; offset++)
+        {
+            var stamp = occurredAtUtc.AddSeconds(offset);
+            var messageId = ordered[offset].Id;
+            await context.OutboxMessages
+                .Where(message => message.Id == messageId)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(message => message.OccurredAtUtc, stamp)
+                    .SetProperty(message => message.ProcessedAtUtc, stamp));
+        }
+    }
+
+    private async Task DrainOutboxAsync()
+    {
+        for (var attempt = 0; attempt < 5000; attempt++)
+        {
+            var processed = await dispatcher.Send(new ProcessOutboxMessagesCommand(100));
+            context.ChangeTracker.Clear();
+            if (processed == 0)
+            {
+                return;
+            }
+        }
+
+        logger.LogWarning("Stopped draining the outbox after the attempt cap; some money-flow events may still be pending.");
+    }
+
+    private static string EmailFor(string firstName, string lastName, int index)
+    {
+        var token = $"{firstName}.{lastName}.{index}"
+            .ToLowerInvariant()
+            .Replace(" ", string.Empty, StringComparison.Ordinal)
+            .Replace("'", string.Empty, StringComparison.Ordinal);
+        return $"{token}@donors.test";
+    }
+}
