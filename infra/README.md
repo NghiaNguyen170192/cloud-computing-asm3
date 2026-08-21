@@ -82,20 +82,11 @@ cd src
 dotnet run --project client\NetCore.Donation.Migration --no-launch-profile -c Release -- -m -s
 ```
 
-## Next app wiring
-
-- Point `DonationApiClient` at the HTTP API URL.
-- RDS connection string + run Migration.
-- Real S3 bucket name (drop MinIO ServiceUrl).
-- Replace Python Lambda shim with .NET API package when ready.
-
 ## Files
 
 | File | Purpose |
 |---|---|
 | `provision-aws-asm3.ps1` | Create/update tagged resources via CLI |
-| `eb-option-settings.json` | Beanstalk VPC/instance settings (shared by donor + admin) |
-| `create-dual-eb.ps1` | Ensure separate donor/admin EB apps/envs |
-| `resource-group.json` | Tag-based resource group |
-| `aws-asm3-stack.yaml` | Optional CloudFormation (Academy early-validation can fail; CLI path is canonical) |
-| `deploy-aws-asm3.yml` | GitHub Actions deploy |
+| `resource-group.json` | Tag-based resource group (`donation-asm3-rg`) |
+| `aws-asm3-outputs.json` | Live names, URLs, and RDS endpoint |
+| [`.github/workflows/deploy-aws-asm3.yml`](../.github/workflows/deploy-aws-asm3.yml) | GitHub Actions deploy |
