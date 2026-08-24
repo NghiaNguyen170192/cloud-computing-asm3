@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using NetCore.Donation.Domain.Entities;
 using NetCore.Donation.Domain.Enums;
@@ -68,17 +67,17 @@ public class ReceiptAndJournalApiTests
         Assert.AreEqual(HttpStatusCode.OK, jsonResponse.StatusCode);
         Assert.AreEqual("application/json", jsonResponse.Content.Headers.ContentType?.MediaType);
 
-        var pdfRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/receipts/{created.Id}");
-        pdfRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/pdf"));
-        var pdfResponse = await client.SendAsync(pdfRequest);
-        Assert.AreEqual(HttpStatusCode.OK, pdfResponse.StatusCode);
-        Assert.AreEqual("application/pdf", pdfResponse.Content.Headers.ContentType?.MediaType);
-        var pdfBytes = await pdfResponse.Content.ReadAsByteArrayAsync();
-        Assert.IsTrue(pdfBytes.Length > 0);
-        Assert.IsTrue(Encoding.ASCII.GetString(pdfBytes).StartsWith("%PDF", StringComparison.Ordinal));
+        var documentRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/receipts/{created.Id}");
+        documentRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/pdf"));
+        var documentResponse = await client.SendAsync(documentRequest);
+        Assert.AreEqual(HttpStatusCode.OK, documentResponse.StatusCode);
+        Assert.AreEqual("application/pdf", documentResponse.Content.Headers.ContentType?.MediaType);
+        var documentBytes = await documentResponse.Content.ReadAsByteArrayAsync();
+        Assert.IsTrue(documentBytes.Length > 0);
+        CollectionAssert.AreEqual("%PDF"u8.ToArray(), documentBytes.Take(4).ToArray());
 
         var unsupportedRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/v1/receipts/{created.Id}");
-        unsupportedRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/plain"));
+        unsupportedRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("image/png"));
         var unsupportedResponse = await client.SendAsync(unsupportedRequest);
         Assert.AreEqual(HttpStatusCode.NotAcceptable, unsupportedResponse.StatusCode);
     }

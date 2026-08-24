@@ -14,10 +14,11 @@ public class CreateReceiptCommandHandlerTest : BaseTest
 {
     private readonly IContactRepository contactRepository;
     private readonly ICountryRepository countryRepository;
+    private readonly IPaymentMethodRepository paymentMethodRepository;
     private readonly IReceiptRepository receiptRepository;
     private readonly ITransactionRepository transactionRepository;
     private readonly IUnitOfWork unitOfWork;
-    private readonly BlankReceiptDocumentGenerator documentGenerator = new();
+    private readonly ReceiptPdfDocumentGenerator documentGenerator = new();
     private readonly InMemoryReceiptDocumentStorage documentStorage = new();
 
     public CreateReceiptCommandHandlerTest()
@@ -26,6 +27,7 @@ public class CreateReceiptCommandHandlerTest : BaseTest
         unitOfWork = context;
         contactRepository = new ContactRepository(context);
         countryRepository = new CountryRepository(context);
+        paymentMethodRepository = new PaymentMethodRepository(context);
         receiptRepository = new ReceiptRepository(context);
         transactionRepository = new TransactionRepository(context);
     }
@@ -53,6 +55,7 @@ public class CreateReceiptCommandHandlerTest : BaseTest
             receiptRepository,
             contactRepository,
             transactionRepository,
+            paymentMethodRepository,
             documentGenerator,
             documentStorage);
 
@@ -63,11 +66,13 @@ public class CreateReceiptCommandHandlerTest : BaseTest
         Assert.IsNotNull(metadata);
         Assert.IsTrue(metadata.HasDocument);
         Assert.AreEqual("application/pdf", metadata.DocumentContentType);
+        Assert.AreEqual($"{metadata.Identifier}.pdf", metadata.DocumentFileName);
 
         var document = await new GetReceiptDocumentQueryHandler(receiptRepository, documentStorage)
             .Handle(new GetReceiptDocumentQuery(id), default);
         Assert.IsNotNull(document);
         Assert.AreEqual("application/pdf", document.ContentType);
+        Assert.AreEqual($"{metadata.Identifier}.pdf", document.FileName);
         Assert.IsTrue(document.SizeBytes > 0);
         await document.Content.DisposeAsync();
     }
@@ -95,10 +100,14 @@ public class CreateReceiptCommandHandlerTest : BaseTest
             receiptRepository,
             contactRepository,
             transactionRepository,
+            paymentMethodRepository,
             documentGenerator,
             documentStorage);
         var id = await createHandler.Handle(new CreateReceiptCommand(contact.Id), default);
-        var objectKey = $"receipts/{id:N}.pdf";
+        var metadata = await new GetReceiptQueryHandler(receiptRepository)
+            .Handle(new GetReceiptQuery(id), default);
+        Assert.IsNotNull(metadata);
+        var objectKey = $"receipts/{metadata.Identifier}.pdf";
         Assert.IsTrue(await documentStorage.ExistsAsync(objectKey));
 
         var deleteHandler = new DeleteReceiptCommandHandler(unitOfWork, receiptRepository, documentStorage);

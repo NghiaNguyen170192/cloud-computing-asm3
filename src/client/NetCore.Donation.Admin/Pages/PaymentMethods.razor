@@ -1,5 +1,6 @@
 @page "/payment-methods"
 @inject DonationApiClient Api
+@inject NavigationManager Nav
 
 <PageTitle>Payment methods — Donation admin</PageTitle>
 
@@ -12,9 +13,9 @@
 }
 
 <RadzenStack Gap="1rem" class="list-page">
-    <FilterToolbar @bind-Auto="@auto" Apply="@ApplyFilter" />
+    <FilterToolbar Apply="@ApplyFilter" Add="@(() => Nav.NavigateTo("payment-methods/new"))" AddText="Add payment method" />
 
-    <RadzenDataFilter @ref="dataFilter" Auto="@auto" TItem="PaymentMethodDto" ViewChanged="@(_ => grid.Reload())">
+    <RadzenDataFilter @ref="dataFilter" Auto="false" TItem="PaymentMethodDto" ViewChanged="@(_ => grid.Reload())">
         <Properties>
             <RadzenDataFilterProperty Property="@nameof(PaymentMethodDto.DisplayName)" Title="Display name" />
             <RadzenDataFilterProperty Property="@nameof(PaymentMethodDto.PaymentType)" Title="Payment type" />
@@ -43,7 +44,6 @@
 
 @code {
     private const string Select = "Id,DisplayName,PaymentType,ContactId,ContactFullName";
-    private bool auto = true;
     private bool loading;
     private string? error;
     private int count;

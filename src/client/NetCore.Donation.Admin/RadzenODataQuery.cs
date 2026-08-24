@@ -25,8 +25,8 @@ public static class RadzenODataQuery
         {
             Select = string.IsNullOrWhiteSpace(select) ? null : select,
             Filter = odataFilter,
-            Top = args.Top,
-            Skip = args.Skip,
+            Top = args.Top is > 0 ? args.Top : 20,
+            Skip = args.Skip ?? 0,
             OrderBy = orderBy,
             Count = true,
         };
@@ -34,7 +34,7 @@ public static class RadzenODataQuery
 
     public static string ShortId(Guid id) => id.ToString("N")[..8];
 
-    public static string ShortId(Guid? id) => id is { } value && value != Guid.Empty ? ShortId(value) : "—";
+    public static string ShortId(Guid? id) => id is { } value && value != Guid.Empty ? ShortId(value) : string.Empty;
 
     public static string IdentifierOrShort(string? identifier, Guid? id) =>
         string.IsNullOrWhiteSpace(identifier) ? ShortId(id) : identifier;

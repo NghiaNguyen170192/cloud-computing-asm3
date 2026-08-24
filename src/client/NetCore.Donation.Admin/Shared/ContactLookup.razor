@@ -1,0 +1,51 @@
+@inject DonationApiClient Api
+
+<LookupSearch TItem="ContactDto"
+              Value="ContactId"
+              ValueChanged="ContactIdChanged"
+              SelectedChanged="SelectedChanged"
+              Label="@Label"
+              SecondaryLabel="@(SecondaryLabel ?? extra)"
+              Placeholder="Search first name, last name, or email"
+              EmptyText="No contacts match that name or email."
+              Disabled="Disabled"
+              DisabledText="@DisabledText"
+              LinkPath="contacts"
+              Search="SearchAsync"
+              Id="contact => contact.Id"
+              Title="contact => contact.DisplayName"
+              Subtitle="contact => contact.Email" />
+
+@code {
+    [Parameter] public Guid ContactId { get; set; }
+
+    [Parameter] public EventCallback<Guid> ContactIdChanged { get; set; }
+
+    [Parameter] public EventCallback<ContactDto?> SelectedChanged { get; set; }
+
+    [Parameter] public string? Label { get; set; }
+
+    [Parameter] public string? SecondaryLabel { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    [Parameter] public string DisabledText { get; set; } = "Search a related record first.";
+
+    private string? extra;
+    private Guid extraForId;
+
+    private Task<IReadOnlyList<ContactDto>> SearchAsync(string term, CancellationToken token) =>
+        LookupQuery.Values(Api.QueryContactsAsync(AdminLookups.ContactSearch(term), token));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        extra = await LookupExtras.ForAsync(
+            ContactId,
+            SecondaryLabel,
+            extraForId,
+            extra,
+            id => Api.GetContactAsync(id),
+            contact => contact?.Email);
+        extraForId = ContactId;
+    }
+}

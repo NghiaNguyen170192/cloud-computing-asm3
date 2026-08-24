@@ -1,7 +1,6 @@
 #nullable enable
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using NetCore.Donation.Infrastructure.Database.Services;
 using Serilog.Context;
 
 namespace NetCore.Donation.Infrastructure.Database.Middleware;
@@ -24,33 +23,19 @@ public class CorrelationIdMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        // Extract correlation ID from request header or generate new one
         var correlationId = ExtractOrCreateCorrelationId(context);
 
-        // Store in HttpContext.Items for access throughout the request
         context.Items[CorrelationIdItemKey] = correlationId;
         context.Response.Headers[CorrelationIdHeaderName] = correlationId;
 
-        if (context.Request.Headers.TryGetValue(IdempotencyKeyAccessor.HeaderName, out var idempotencyHeader))
-        {
-            var idempotencyKey = idempotencyHeader.ToString();
-            if (!string.IsNullOrWhiteSpace(idempotencyKey))
-            {
-                context.Items[IdempotencyKeyAccessor.ItemKey] = idempotencyKey;
-                context.Response.Headers[IdempotencyKeyAccessor.HeaderName] = idempotencyKey;
-            }
-        }
-
         using (LogContext.PushProperty("CorrelationId", correlationId))
         {
-            // Continue with pipeline
             await next(context);
         }
     }
 
     private static string ExtractOrCreateCorrelationId(HttpContext context)
     {
-        // Try to extract from incoming request header
         if (context.Request.Headers.TryGetValue(CorrelationIdHeaderName, out var correlationIdHeader))
         {
             var headerValue = correlationIdHeader.ToString();
@@ -60,7 +45,6 @@ public class CorrelationIdMiddleware
             }
         }
 
-        // Generate new correlation ID if not provided
         return Guid.NewGuid().ToString("N");
     }
 }
@@ -70,11 +54,6 @@ public class CorrelationIdMiddleware
 /// </summary>
 public static class CorrelationIdMiddlewareExtensions
 {
-    /// <summary>
-    /// Adds the correlation ID middleware to the application pipeline.
-    /// </summary>
-    /// <param name="app">The application builder.</param>
-    /// <returns>The application builder for chaining.</returns>
     public static IApplicationBuilder UseCorrelationId(this IApplicationBuilder app)
     {
         if (app == null)

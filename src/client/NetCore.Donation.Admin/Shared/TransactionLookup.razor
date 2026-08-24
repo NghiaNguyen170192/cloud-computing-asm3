@@ -1,0 +1,61 @@
+@inject DonationApiClient Api
+
+<LookupSearch TItem="TransactionDto"
+              Value="TransactionId"
+              ValueChanged="TransactionIdChanged"
+              SelectedChanged="SelectedChanged"
+              Label="@Label"
+              SecondaryLabel="@(SecondaryLabel ?? extra)"
+              Placeholder="Search transaction identifier or donor name"
+              EmptyText="No transactions match that identifier or name."
+              Disabled="Disabled || (RequireContact && ContactId == Guid.Empty)"
+              DisabledText="@(RequireContact && ContactId == Guid.Empty ? "Search a contact first." : "")"
+              LinkPath="transactions"
+              Search="SearchAsync"
+              Id="transaction => transaction.Id"
+              Title="transaction => RadzenODataQuery.IdentifierOrShort(transaction.Identifier, transaction.Id)"
+              Subtitle="transaction => LookupExtras.Describe(transaction)" />
+
+@code {
+    [Parameter] public Guid ContactId { get; set; }
+
+    [Parameter] public Guid TransactionId { get; set; }
+
+    [Parameter] public EventCallback<Guid> TransactionIdChanged { get; set; }
+
+    [Parameter] public EventCallback<TransactionDto?> SelectedChanged { get; set; }
+
+    [Parameter] public string? Label { get; set; }
+
+    [Parameter] public string? SecondaryLabel { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    [Parameter] public bool RequireContact { get; set; } = true;
+
+    private string? extra;
+    private Guid extraForId;
+
+    private Task<IReadOnlyList<TransactionDto>> SearchAsync(string term, CancellationToken token)
+    {
+        Guid? contactId = ContactId == Guid.Empty ? null : ContactId;
+        if (RequireContact && contactId is null)
+        {
+            return Task.FromResult<IReadOnlyList<TransactionDto>>([]);
+        }
+
+        return LookupQuery.Values(Api.QueryTransactionsAsync(AdminLookups.TransactionSearch(term), contactId, cancellationToken: token));
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        extra = await LookupExtras.ForAsync(
+            TransactionId,
+            SecondaryLabel,
+            extraForId,
+            extra,
+            id => Api.GetTransactionAsync(id),
+            LookupExtras.Describe);
+        extraForId = TransactionId;
+    }
+}

@@ -5,18 +5,17 @@ using NetCore.Donation.Domain.Events;
 
 namespace NetCore.Donation.Application.Donation.Events;
 
-public class DonationCreatedDomainEventHandler(
+public class PaymentScheduleCreatedDomainEventHandler(
     IMediator mediator,
-    ILogger<DonationCreatedDomainEventHandler> logger)
-    : INotificationHandler<DonationCreatedDomainEvent>
+    ILogger<PaymentScheduleCreatedDomainEventHandler> logger)
+    : INotificationHandler<PaymentScheduleCreatedDomainEvent>
 {
-    public async Task Handle(DonationCreatedDomainEvent notification, CancellationToken cancellationToken)
+    public async Task Handle(PaymentScheduleCreatedDomainEvent notification, CancellationToken cancellationToken)
     {
         logger.LogInformation(
-            "Donation created on schedule {PaymentScheduleId} for contact {ContactId} ({DonationKind})",
+            "Payment schedule created {PaymentScheduleId} for contact {ContactId}",
             notification.PaymentScheduleId,
-            notification.ContactId,
-            "recurring");
+            notification.ContactId);
 
         await mediator.Send(
             new ProcessDonationTransactionCommand(

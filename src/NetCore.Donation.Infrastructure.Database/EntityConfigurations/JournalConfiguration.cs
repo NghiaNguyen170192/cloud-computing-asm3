@@ -15,7 +15,7 @@ public class JournalConfiguration : EntityTypeConfiguration<Journal>
 
         builder
             .HasOne(journal => journal.Transaction)
-            .WithMany()
+            .WithMany(transaction => transaction.Journals)
             .HasForeignKey(journal => journal.TransactionId)
             .OnDelete(DeleteBehavior.Restrict)
             .IsRequired();

@@ -13,8 +13,7 @@ namespace NetCore.Donation.Infrastructure.Database;
 public class ApplicationDatabaseContext(
     DbContextOptions<ApplicationDatabaseContext> databaseContextOptions,
     IPublisher? publisher = null,
-    ICorrelationIdAccessor? correlationIdAccessor = null,
-    IIdempotencyKeyAccessor? idempotencyKeyAccessor = null)
+    ICorrelationIdAccessor? correlationIdAccessor = null)
     : DbContext(databaseContextOptions), IUnitOfWork
 {
     private static readonly JsonSerializerOptions SerializerOptions = new()
@@ -35,8 +34,6 @@ public class ApplicationDatabaseContext(
     public DbSet<Transaction> Transactions { get; set; }
 
     public DbSet<Journal> Journals { get; set; }
-
-    public DbSet<IdempotencyLog> IdempotencyLogs { get; set; }
 
     public DbSet<OutboxMessage> OutboxMessages { get; set; }
 
@@ -96,11 +93,6 @@ public class ApplicationDatabaseContext(
     private void CaptureDomainEventsAsOutboxMessages()
     {
         var correlationId = correlationIdAccessor?.CorrelationId ?? Guid.NewGuid().ToString("N");
-        var idempotencyKey = idempotencyKeyAccessor?.IdempotencyKey;
-        if (string.IsNullOrWhiteSpace(idempotencyKey))
-        {
-            idempotencyKey = correlationId;
-        }
 
         var domainEntities = ChangeTracker
             .Entries<Entity>()
@@ -121,29 +113,12 @@ public class ApplicationDatabaseContext(
                     ?? domainEvent.GetType().FullName
                     ?? domainEvent.GetType().Name;
 
-                if (HasOutboxMessage(idempotencyKey, messageType))
-                {
-                    continue;
-                }
-
                 var payload = JsonSerializer.Serialize(domainEvent, domainEvent.GetType(), SerializerOptions);
-                OutboxMessages.Add(OutboxMessage.Create(messageType, payload, correlationId, idempotencyKey));
+                OutboxMessages.Add(OutboxMessage.Create(messageType, payload, correlationId, correlationId));
             }
 
             entry.Entity.ClearDomainEvents();
         }
-    }
-
-    private bool HasOutboxMessage(string idempotencyKey, string messageType)
-    {
-        if (OutboxMessages.Local.Any(message =>
-            message.IdempotencyKey == idempotencyKey && message.MessageType == messageType))
-        {
-            return true;
-        }
-
-        return OutboxMessages.Any(message =>
-            message.IdempotencyKey == idempotencyKey && message.MessageType == messageType);
     }
 }
 #pragma warning restore CS9113

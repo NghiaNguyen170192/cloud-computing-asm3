@@ -33,7 +33,12 @@ public class UpdatePaymentScheduleCommandHandler(
             throw new InvalidOperationException("The payment method does not belong to the contact.");
         }
 
-        request.UpdateEntity(paymentSchedule);
+        paymentSchedule.UpdateSchedule(
+            request.PaymentMethodId,
+            request.Amount,
+            request.BookDate,
+            request.RecurringInterval,
+            paymentMethod.PaymentType);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return true;

@@ -50,7 +50,7 @@ public class ReceiptController(IMediator mediator) : AuthorizedBaseController
             return StatusCode(StatusCodes.Status406NotAcceptable);
         }
 
-        if (format == ReceiptResponseFormat.Pdf)
+        if (format == ReceiptResponseFormat.Document)
         {
             var document = await mediator.Send(new GetReceiptDocumentQuery(id));
             if (document is null)
@@ -113,7 +113,7 @@ public class ReceiptController(IMediator mediator) : AuthorizedBaseController
             return ReceiptResponseFormat.Json;
         }
 
-        var pdfQuality = accept
+        var documentQuality = accept
             .Where(header => header.MediaType.HasValue &&
                 header.MediaType.Value.Equals("application/pdf", StringComparison.OrdinalIgnoreCase))
             .Select(header => header.Quality ?? 1.0)
@@ -129,14 +129,14 @@ public class ReceiptController(IMediator mediator) : AuthorizedBaseController
             .DefaultIfEmpty(0)
             .Max();
 
-        if (pdfQuality <= 0 && jsonQuality <= 0)
+        if (documentQuality <= 0 && jsonQuality <= 0)
         {
             return ReceiptResponseFormat.NotAcceptable;
         }
 
-        if (pdfQuality > jsonQuality)
+        if (documentQuality > jsonQuality)
         {
-            return ReceiptResponseFormat.Pdf;
+            return ReceiptResponseFormat.Document;
         }
 
         return ReceiptResponseFormat.Json;
@@ -145,7 +145,7 @@ public class ReceiptController(IMediator mediator) : AuthorizedBaseController
     private enum ReceiptResponseFormat
     {
         Json,
-        Pdf,
+        Document,
         NotAcceptable,
     }
 }

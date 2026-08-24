@@ -15,10 +15,9 @@ public class OutboxMessageController(IMediator mediator) : AuthorizedBaseControl
     [ProducesResponseType((int)HttpStatusCode.OK)]
     public async Task<IActionResult> GetOutboxMessages(
         [FromQuery] string? correlationId,
-        [FromQuery] string? idempotencyKey,
         ODataQueryOptions<QueryOutboxMessageDto> options)
     {
-        var response = await mediator.Send(new QueryOutboxMessages(correlationId, idempotencyKey));
+        var response = await mediator.Send(new QueryOutboxMessages(correlationId));
         return ODataPageResult.Create(response, options);
     }
 }

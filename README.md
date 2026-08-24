@@ -74,7 +74,7 @@ If migration/API stay in **Waiting** after a restart: stop the previous AppHost,
 `GET /api/v1/receipts/{id}` returns JSON metadata by default (`Accept: application/json` or `*/*`).  
 Send `Accept: application/pdf` on the same URI to download the stored receipt PDF. Unsupported media types return `406`.
 
-`POST /api/v1/receipts` creates the receipt record, generates a blank PDF, uploads it to object storage, and persists document metadata.
+`POST /api/v1/receipts` creates the receipt record, generates a PDF of the donation receipt letter, uploads it to object storage, and persists document metadata.
 
 <br />
 

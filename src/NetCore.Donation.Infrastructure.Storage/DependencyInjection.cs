@@ -21,7 +21,7 @@ public static class DependencyInjection
         });
 
         services.AddSingleton<IReceiptDocumentStorage, S3ReceiptDocumentStorage>();
-        services.AddSingleton<IReceiptDocumentGenerator, BlankReceiptDocumentGenerator>();
+        services.AddSingleton<IReceiptDocumentGenerator, ReceiptPdfDocumentGenerator>();
 
         return services;
     }

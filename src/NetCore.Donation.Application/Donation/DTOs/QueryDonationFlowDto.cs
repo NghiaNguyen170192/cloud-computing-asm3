@@ -19,6 +19,9 @@ public sealed record QueryDonationFlowDto
     [JsonPropertyName("contact-email")]
     public string? ContactEmail { get; set; }
 
+    [JsonPropertyName("contact-full-name")]
+    public string? ContactFullName { get; set; }
+
     [JsonPropertyName("payment-method-id")]
     public Guid? PaymentMethodId { get; set; }
 

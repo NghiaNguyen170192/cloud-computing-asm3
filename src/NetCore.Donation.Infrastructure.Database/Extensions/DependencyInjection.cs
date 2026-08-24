@@ -49,7 +49,6 @@ public static class DependencyInjection
 		services.AddScoped<ITransactionRepository, TransactionRepository>();
 		services.AddScoped<IReceiptRepository, ReceiptRepository>();
 		services.AddScoped<IJournalRepository, JournalRepository>();
-		services.AddScoped<IIdempotencyRepository, IdempotencyRepository>();
 		services.AddScoped<IOutboxMessageRepository, OutboxMessageRepository>();
 		services.AddSingleton<RecordingIntegrationEventPublisher>();
 		services.AddSingleton<IIntegrationEventPublisher>(sp => sp.GetRequiredService<RecordingIntegrationEventPublisher>());

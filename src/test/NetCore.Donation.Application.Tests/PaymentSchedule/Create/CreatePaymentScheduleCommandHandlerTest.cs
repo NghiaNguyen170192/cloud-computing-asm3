@@ -1,7 +1,9 @@
 using NetCore.Donation.Application.PaymentSchedule.Create;
 using NetCore.Donation.Domain.Enums;
+using NetCore.Donation.Domain.Events;
 using NetCore.Donation.Domain.IRepositories;
 using NetCore.Donation.Domain.SharedKernel;
+using NetCore.Donation.Infrastructure.Database;
 using NetCore.Donation.Infrastructure.Database.Repositories;
 
 namespace NetCore.Donation.Application.Tests.PaymentSchedule.Create;
@@ -9,6 +11,7 @@ namespace NetCore.Donation.Application.Tests.PaymentSchedule.Create;
 [TestClass]
 public class CreatePaymentScheduleCommandHandlerTest : BaseTest
 {
+    private readonly ApplicationDatabaseContext context;
     private readonly IContactRepository contactRepository;
     private readonly ICountryRepository countryRepository;
     private readonly IPaymentMethodRepository paymentMethodRepository;
@@ -17,7 +20,7 @@ public class CreatePaymentScheduleCommandHandlerTest : BaseTest
 
     public CreatePaymentScheduleCommandHandlerTest()
     {
-        var context = GetContext().Result;
+        context = GetContext().Result;
         unitOfWork = context;
         contactRepository = new ContactRepository(context);
         countryRepository = new CountryRepository(context);
@@ -52,6 +55,9 @@ public class CreatePaymentScheduleCommandHandlerTest : BaseTest
 
         // Assert
         Assert.AreNotEqual(Guid.Empty, id);
+        Assert.IsTrue(
+            context.OutboxMessages.Any(message => message.MessageType.Contains(nameof(PaymentScheduleCreatedDomainEvent))));
+        Assert.AreEqual(0, context.Transactions.Count());
     }
 
     [TestMethod]

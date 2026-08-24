@@ -106,7 +106,7 @@ else
             gifted = transactions.Value
                 .Where(item => item.Status == TransactionStatus.Succeeded)
                 .Sum(item => item.Amount);
-            recent = transactions.Value.Take(10).ToList();
+            recent = transactions.Value.Take(20).ToList();
         }
         catch (Exception exception)
         {

@@ -1,17 +1,17 @@
 <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" AlignItems="AlignItems.Center" Wrap="FlexWrap.Wrap"
              class="rz-p-3 rz-border-radius-1" Style="border: var(--rz-grid-cell-border);">
-    <RadzenCheckBox Value="@Auto" ValueChanged="@AutoChanged" Name="@Name" />
-    <RadzenLabel Text="Auto filter" Component="@Name" class="rz-me-6" />
-    <RadzenButton Text="Apply Filter" Click="@Apply" Disabled="@Auto" Size="ButtonSize.Small" />
-    <span class="text-muted small">Leave the filter empty to show all records.</span>
+    @if (Add.HasDelegate)
+    {
+        <RadzenButton Text="@AddText" Click="@Add" Size="ButtonSize.Small" />
+    }
+    <RadzenButton Text="Apply Filter" Click="@Apply" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" />
+    <span class="text-muted small">Each view loads the top 20 records. Apply a filter to search.</span>
 </RadzenStack>
 
 @code {
-    [Parameter] public bool Auto { get; set; }
-
-    [Parameter] public EventCallback<bool> AutoChanged { get; set; }
-
     [Parameter] public EventCallback Apply { get; set; }
 
-    private string Name => $"auto-{GetHashCode()}";
+    [Parameter] public EventCallback Add { get; set; }
+
+    [Parameter] public string AddText { get; set; } = "Add";
 }

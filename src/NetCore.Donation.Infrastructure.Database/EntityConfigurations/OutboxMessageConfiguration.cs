@@ -44,10 +44,5 @@ public class OutboxMessageConfiguration : IEntityTypeConfiguration<OutboxMessage
 
         builder.HasIndex(message => message.IdempotencyKey)
             .HasDatabaseName("IX_OutboxMessages_IdempotencyKey");
-
-        builder.HasIndex(message => new { message.IdempotencyKey, message.MessageType })
-            .IsUnique()
-            .HasFilter("\"IdempotencyKey\" <> ''")
-            .HasDatabaseName("IX_OutboxMessages_IdempotencyKey_MessageType");
     }
 }

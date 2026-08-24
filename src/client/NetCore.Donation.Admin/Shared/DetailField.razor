@@ -1,8 +1,37 @@
 <dt>@Label</dt>
-<dd>@ChildContent</dd>
+<dd>
+    @if (Plain)
+    {
+        @ChildContent
+    }
+    else
+    {
+        <div class="field-wrap">
+            @if (Locked)
+            {
+                <span class="field-lock" title="Locked" aria-hidden="true">
+                    <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+                        <path d="M6 7V5.5a2 2 0 1 1 4 0V7h1.5A1.5 1.5 0 0 1 13 8.5v4A1.5 1.5 0 0 1 11.5 14h-7A1.5 1.5 0 0 1 3 12.5v-4A1.5 1.5 0 0 1 4.5 7H6zm1.25-1.5V7h1.5V5.5a.75.75 0 0 0-1.5 0z" />
+                    </svg>
+                </span>
+            }
+            else
+            {
+                <span class="field-lock-spacer" aria-hidden="true"></span>
+            }
+            <div class="field-box @(Locked ? "locked" : "editable")">
+                <div class="field-box-value">@ChildContent</div>
+            </div>
+        </div>
+    }
+</dd>
 
 @code {
     [Parameter] public string Label { get; set; } = "";
+
+    [Parameter] public bool Locked { get; set; }
+
+    [Parameter] public bool Plain { get; set; }
 
     [Parameter] public RenderFragment? ChildContent { get; set; }
 }

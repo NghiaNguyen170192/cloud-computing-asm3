@@ -62,7 +62,6 @@ public class UserMakesDonationCommandHandler(
                 bookDate,
                 interval,
                 request.PaymentType);
-            schedule.RaiseDonationCreated();
             await paymentScheduleRepository.AddAsync(schedule, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
 

@@ -6,5 +6,9 @@ namespace NetCore.Donation.Application.Transaction.Update;
 public sealed record UpdateTransactionCommand(
     Guid Id,
     decimal Amount,
+    Guid PaymentMethodId,
     PaymentType PaymentType,
-    DateOnly ReceivedDate) : IRequest<bool>;
+    DateOnly BookDate,
+    DateOnly ReceivedDate,
+    Guid? PaymentScheduleId,
+    TransactionStatus Status) : IRequest<bool>;

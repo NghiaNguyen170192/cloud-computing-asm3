@@ -3,8 +3,7 @@ namespace NetCore.Donation.Domain.Storage;
 public interface IReceiptDocumentGenerator
 {
     Task<ReceiptDocumentContent> GenerateAsync(
-        Guid receiptId,
-        Guid contactId,
-        Guid? transactionId,
+        string fileName,
+        string body,
         CancellationToken cancellationToken = default);
 }

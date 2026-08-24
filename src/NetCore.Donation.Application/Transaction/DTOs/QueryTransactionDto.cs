@@ -43,4 +43,16 @@ public sealed record QueryTransactionDto
 
     [JsonPropertyName("received-date")]
     public DateOnly ReceivedDate { get; set; }
+
+    [JsonPropertyName("journal-id")]
+    public Guid? JournalId { get; set; }
+
+    [JsonPropertyName("journal-identifier")]
+    public string? JournalIdentifier { get; set; }
+
+    [JsonPropertyName("receipt-id")]
+    public Guid? ReceiptId { get; set; }
+
+    [JsonPropertyName("receipt-identifier")]
+    public string? ReceiptIdentifier { get; set; }
 }

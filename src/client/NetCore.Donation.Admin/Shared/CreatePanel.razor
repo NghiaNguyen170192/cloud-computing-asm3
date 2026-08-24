@@ -1,0 +1,20 @@
+<div class="create-panel">
+    <h2 class="h6 mb-3">@Title</h2>
+    @ChildContent
+    <div class="d-flex gap-2 mt-3">
+        <RadzenButton Text="Save" Click="@Save" Disabled="@Busy" Size="ButtonSize.Small" />
+        <RadzenButton Text="Cancel" Click="@Cancel" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Disabled="@Busy" />
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "Add";
+
+    [Parameter] public bool Busy { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter] public EventCallback Save { get; set; }
+
+    [Parameter] public EventCallback Cancel { get; set; }
+}

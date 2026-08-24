@@ -4,6 +4,7 @@ using NetCore.Donation.Application.Donation.CompleteDonationTransaction;
 using NetCore.Donation.Application.Donation.UserMakesDonation;
 using NetCore.Donation.Application.Extensions;
 using NetCore.Donation.Application.Outbox.Process;
+using NetCore.Donation.Application.PaymentSchedule.Create;
 using NetCore.Donation.Domain.Entities;
 using NetCore.Donation.Domain.Enums;
 using NetCore.Donation.Domain.Events;
@@ -48,9 +49,10 @@ public class DonationCommandPipelineTest : BaseTest
 
         var messageTypes = await context.OutboxMessages.Select(message => message.MessageType).ToListAsync();
         Assert.IsTrue(messageTypes.Any(type => type.Contains(nameof(ContactCreatedDomainEvent))));
-        Assert.IsTrue(messageTypes.Any(type => type.Contains(nameof(DonationPaymentMethodCreatedDomainEvent))));
-        Assert.IsTrue(messageTypes.Any(type => type.Contains(nameof(TransactionPendingDomainEvent))));
-        Assert.IsFalse(messageTypes.Any(type => type.Contains(nameof(DonationCreatedDomainEvent))));
+        Assert.IsTrue(messageTypes.Any(type => type.Contains(nameof(PaymentMethodCreatedDomainEvent))));
+        Assert.IsTrue(messageTypes.Any(type => type.Contains(nameof(TransactionCreatedDomainEvent))));
+        Assert.IsFalse(messageTypes.Any(type => type.Contains(nameof(TransactionPendingDomainEvent))));
+        Assert.IsFalse(messageTypes.Any(type => type.Contains(nameof(PaymentScheduleCreatedDomainEvent))));
     }
 
     [TestMethod]
@@ -76,9 +78,11 @@ public class DonationCommandPipelineTest : BaseTest
         Assert.AreEqual(1, await context.Journals.CountAsync());
 
         var messageTypes = await context.OutboxMessages.Select(message => message.MessageType).ToListAsync();
+        Assert.IsTrue(messageTypes.Any(type => type.Contains(nameof(TransactionCreatedDomainEvent))));
         Assert.IsTrue(messageTypes.Any(type => type.Contains(nameof(TransactionPendingDomainEvent))));
-        Assert.IsTrue(messageTypes.Any(type => type.Contains(nameof(TransactionSucceededDomainEvent))));
-        Assert.IsTrue(messageTypes.Any(type => type.Contains(nameof(DonationReceiptGeneratedDomainEvent))));
+        Assert.IsTrue(messageTypes.Any(type => type.Contains(nameof(TransactionCompletedDomainEvent))));
+        Assert.IsTrue(messageTypes.Any(type => type.Contains(nameof(ReceiptCreatedDomainEvent))));
+        Assert.IsTrue(messageTypes.Any(type => type.Contains(nameof(ReceiptGeneratedDomainEvent))));
         Assert.IsTrue(messageTypes.Any(type => type.Contains(nameof(JournalEntryCreatedDomainEvent))));
         Assert.IsTrue(await context.OutboxMessages.AllAsync(message => message.ProcessedAtUtc != null));
     }
@@ -107,7 +111,7 @@ public class DonationCommandPipelineTest : BaseTest
                 message.MessageType.Contains(nameof(TransactionFailedDomainEvent))));
         Assert.IsFalse(
             await context.OutboxMessages.AnyAsync(message =>
-                message.MessageType.Contains(nameof(DonationReceiptGeneratedDomainEvent))));
+                message.MessageType.Contains(nameof(ReceiptGeneratedDomainEvent))));
         Assert.IsFalse(
             await context.OutboxMessages.AnyAsync(message =>
                 message.MessageType.Contains(nameof(JournalEntryCreatedDomainEvent))));
@@ -136,6 +140,63 @@ public class DonationCommandPipelineTest : BaseTest
         Assert.AreEqual(RecurringInterval.Monthly, (await context.PaymentSchedules.SingleAsync()).RecurringInterval);
         Assert.AreEqual(PaymentType.CreditCard, (await context.PaymentSchedules.SingleAsync()).PaymentType);
         Assert.AreEqual(0, await context.Transactions.CountAsync());
+    }
+
+    [TestMethod]
+    public async Task CreatePaymentSchedule_CompletesFirstTransactionOnBookDateThroughOutbox()
+    {
+        await using var provider = BuildProvider(succeed: true);
+        await using var startScope = provider.CreateAsyncScope();
+        var startContext = startScope.ServiceProvider.GetRequiredService<ApplicationDatabaseContext>();
+        await startContext.Database.EnsureCreatedAsync();
+        var countryId = await SeedCountryAsync(startContext);
+        var contact = Domain.Entities.Contact.Create(
+            "Ada",
+            "Lovelace",
+            new DateOnly(1815, 12, 10),
+            "1 Analytical Engine Way",
+            "ada@example.com",
+            "123456",
+            countryId);
+        startContext.Contacts.Add(contact);
+        await startContext.SaveChangesAsync(CancellationToken.None);
+
+        var paymentMethod = Domain.Entities.PaymentMethod.Create(contact.Id, "Visa", PaymentType.Bank);
+        startContext.PaymentMethods.Add(paymentMethod);
+        await startContext.SaveChangesAsync(CancellationToken.None);
+
+        var bookDate = new DateOnly(2026, 8, 15);
+        var mediator = startScope.ServiceProvider.GetRequiredService<IMediator>();
+        await mediator.Send(new CreatePaymentScheduleCommand(
+            contact.Id,
+            paymentMethod.Id,
+            50m,
+            bookDate,
+            RecurringInterval.Monthly,
+            PaymentType.Bank));
+        await DrainOutboxAsync(mediator);
+
+        await using var assertScope = provider.CreateAsyncScope();
+        var context = assertScope.ServiceProvider.GetRequiredService<ApplicationDatabaseContext>();
+        var schedule = await context.PaymentSchedules.SingleAsync();
+        var transaction = await context.Transactions.SingleAsync();
+        Assert.AreEqual(schedule.Id, transaction.PaymentScheduleId);
+        Assert.AreEqual(bookDate, transaction.BookDate);
+        Assert.AreEqual(TransactionStatus.Succeeded, transaction.Status);
+        Assert.AreEqual(1, await context.Journals.CountAsync());
+        Assert.AreEqual(1, await context.Receipts.CountAsync());
+        Assert.IsTrue(
+            await context.OutboxMessages.AnyAsync(message =>
+                message.MessageType.Contains(nameof(PaymentScheduleCreatedDomainEvent))));
+        Assert.IsTrue(
+            await context.OutboxMessages.AnyAsync(message =>
+                message.MessageType.Contains(nameof(TransactionCreatedDomainEvent))));
+        Assert.IsTrue(
+            await context.OutboxMessages.AnyAsync(message =>
+                message.MessageType.Contains(nameof(TransactionPendingDomainEvent))));
+        Assert.IsTrue(
+            await context.OutboxMessages.AnyAsync(message =>
+                message.MessageType.Contains(nameof(TransactionCompletedDomainEvent))));
     }
 
     private static UserMakesDonationCommand CreateCommand(
@@ -205,7 +266,7 @@ public class DonationCommandPipelineTest : BaseTest
         services.AddSingleton<IIntegrationEventPublisher>(
             provider => provider.GetRequiredService<RecordingIntegrationEventPublisher>());
         services.AddSingleton<IReceiptDocumentStorage, InMemoryReceiptDocumentStorage>();
-        services.AddSingleton<IReceiptDocumentGenerator, BlankReceiptDocumentGenerator>();
+        services.AddSingleton<IReceiptDocumentGenerator, ReceiptPdfDocumentGenerator>();
         return services.BuildServiceProvider();
     }
 

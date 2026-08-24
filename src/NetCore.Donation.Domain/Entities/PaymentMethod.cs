@@ -30,7 +30,7 @@ public class PaymentMethod : Entity, IAggregateRoot
             PaymentType = paymentType,
         };
 
-        paymentMethod.AddDomainEvent(new DonationPaymentMethodCreatedDomainEvent(
+        paymentMethod.AddDomainEvent(new PaymentMethodCreatedDomainEvent(
             paymentMethod.Id,
             paymentMethod.ContactId,
             paymentMethod.DisplayName,

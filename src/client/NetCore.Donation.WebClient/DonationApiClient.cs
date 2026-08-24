@@ -15,6 +15,11 @@ public sealed class DonationApiClient(HttpClient http)
     public Task<IReadOnlyList<CountryDto>> GetCountriesAsync(CancellationToken cancellationToken = default) =>
         GetListAsync<CountryDto>("api/v1/countries", cancellationToken);
 
+    public Task<ODataListResult<CountryDto>> QueryCountriesAsync(
+        ODataListRequest? request = null,
+        CancellationToken cancellationToken = default) =>
+        QueryODataAsync<CountryDto>("api/v1/countries", request, cancellationToken);
+
     public Task<ODataListResult<ContactDto>> QueryContactsAsync(
         ODataListRequest? request = null,
         CancellationToken cancellationToken = default) =>
@@ -43,6 +48,7 @@ public sealed class DonationApiClient(HttpClient http)
         string email,
         string phoneNumber,
         Guid countryId,
+        Gender gender,
         bool doNotEmail,
         bool doNotSms,
         CancellationToken cancellationToken = default) =>
@@ -57,10 +63,49 @@ public sealed class DonationApiClient(HttpClient http)
                 email,
                 phoneNumber,
                 countryId,
+                gender,
                 doNotEmail,
                 doNotSms,
             },
             cancellationToken);
+
+    public Task UpdateContactAsync(
+        Guid id,
+        string firstName,
+        string lastName,
+        DateOnly dateOfBirth,
+        string addressLine,
+        string email,
+        string phoneNumber,
+        Guid countryId,
+        Gender gender,
+        bool doNotEmail,
+        bool doNotSms,
+        CancellationToken cancellationToken = default) =>
+        SendAsync(
+            HttpMethod.Put,
+            $"api/v1/contacts/{id}",
+            new
+            {
+                id,
+                firstName,
+                lastName,
+                dateOfBirth,
+                addressLine,
+                email,
+                phoneNumber,
+                countryId,
+                gender,
+                doNotEmail,
+                doNotSms,
+            },
+            cancellationToken);
+
+    public Task SetContactActiveAsync(
+        Guid id,
+        bool isActive,
+        CancellationToken cancellationToken = default) =>
+        SendAsync(HttpMethod.Patch, $"api/v1/contacts/{id}/active", new { id, isActive }, cancellationToken);
 
     public Task SetContactPreferencesAsync(
         Guid id,
@@ -81,8 +126,20 @@ public sealed class DonationApiClient(HttpClient http)
     public Task<Guid> CreatePaymentMethodAsync(
         Guid contactId,
         string displayName,
+        PaymentType paymentType = PaymentType.Bank,
         CancellationToken cancellationToken = default) =>
-        PostIdAsync("api/v1/payment-methods", new { contactId, displayName }, cancellationToken);
+        PostIdAsync("api/v1/payment-methods", new { contactId, displayName, paymentType }, cancellationToken);
+
+    public Task UpdatePaymentMethodAsync(
+        Guid id,
+        string displayName,
+        PaymentType paymentType,
+        CancellationToken cancellationToken = default) =>
+        SendAsync(
+            HttpMethod.Put,
+            $"api/v1/payment-methods/{id}",
+            new { id, displayName, paymentType },
+            cancellationToken);
 
     public Task<ODataListResult<PaymentScheduleDto>> QueryPaymentSchedulesAsync(
         ODataListRequest? request = null,
@@ -104,10 +161,25 @@ public sealed class DonationApiClient(HttpClient http)
         decimal amount,
         DateOnly bookDate,
         RecurringInterval recurringInterval,
+        PaymentType paymentType = PaymentType.Bank,
         CancellationToken cancellationToken = default) =>
         PostIdAsync(
             "api/v1/payment-schedules",
-            new { contactId, paymentMethodId, amount, bookDate, recurringInterval },
+            new { contactId, paymentMethodId, amount, bookDate, recurringInterval, paymentType },
+            cancellationToken);
+
+    public Task UpdatePaymentScheduleAsync(
+        Guid id,
+        Guid paymentMethodId,
+        decimal amount,
+        DateOnly bookDate,
+        RecurringInterval recurringInterval,
+        PaymentType paymentType,
+        CancellationToken cancellationToken = default) =>
+        SendAsync(
+            HttpMethod.Put,
+            $"api/v1/payment-schedules/{id}",
+            new { id, paymentMethodId, amount, bookDate, recurringInterval, paymentType },
             cancellationToken);
 
     public Task<ODataListResult<TransactionDto>> QueryTransactionsAsync(
@@ -205,7 +277,7 @@ public sealed class DonationApiClient(HttpClient http)
 
     public Task<Guid> CreateTransactionAsync(
         decimal amount,
-        Guid paymentScheduleId,
+        Guid? paymentScheduleId,
         Guid contactId,
         Guid paymentMethodId,
         PaymentType paymentType,
@@ -224,6 +296,22 @@ public sealed class DonationApiClient(HttpClient http)
                 bookDate,
                 receivedDate,
             },
+            cancellationToken);
+
+    public Task UpdateTransactionAsync(
+        Guid id,
+        decimal amount,
+        Guid paymentMethodId,
+        PaymentType paymentType,
+        DateOnly bookDate,
+        DateOnly receivedDate,
+        Guid? paymentScheduleId = null,
+        TransactionStatus status = TransactionStatus.Succeeded,
+        CancellationToken cancellationToken = default) =>
+        SendAsync(
+            HttpMethod.Put,
+            $"api/v1/transactions/{id}",
+            new { id, amount, paymentMethodId, paymentType, bookDate, receivedDate, paymentScheduleId, status },
             cancellationToken);
 
     public Task<ODataListResult<JournalDto>> QueryJournalsAsync(
@@ -260,7 +348,13 @@ public sealed class DonationApiClient(HttpClient http)
         CancellationToken cancellationToken = default) =>
         PostIdAsync("api/v1/receipts", new { contactId, transactionId }, cancellationToken);
 
-    public async Task<byte[]> GetReceiptPdfAsync(Guid id, CancellationToken cancellationToken = default)
+    public Task UpdateReceiptAsync(
+        Guid id,
+        Guid? transactionId,
+        CancellationToken cancellationToken = default) =>
+        SendAsync(HttpMethod.Put, $"api/v1/receipts/{id}", new { id, transactionId }, cancellationToken);
+
+    public async Task<byte[]> GetReceiptDocumentAsync(Guid id, CancellationToken cancellationToken = default)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, $"api/v1/receipts/{id}");
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/pdf"));

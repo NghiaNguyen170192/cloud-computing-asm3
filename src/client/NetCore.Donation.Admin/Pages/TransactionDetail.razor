@@ -1,13 +1,11 @@
+@page "/transactions/new"
 @page "/transactions/{Id:guid}"
 @inject DonationApiClient Api
 @inject NavigationManager Nav
 
-<PageTitle>Transaction — Donation admin</PageTitle>
+<PageTitle>@(IsNew ? "New transaction" : "Transaction") — Donation admin</PageTitle>
 
-<div class="d-flex align-items-center gap-3 mb-3">
-    <h1 class="mb-0">Transaction</h1>
-    <RadzenButton Text="Back to list" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@(() => Nav.NavigateTo("transactions"))" />
-</div>
+<EntityFormBar Title="@(IsNew ? "New transaction" : "Transaction")" Busy="@saving" Save="@SaveAsync" Back="@(() => Nav.NavigateTo("transactions"))" />
 
 @if (!string.IsNullOrWhiteSpace(error))
 {
@@ -17,7 +15,7 @@ else if (loading)
 {
     <p>Loading…</p>
 }
-else if (item is null)
+else if (!IsNew && missing)
 {
     <p class="text-muted">Transaction not found.</p>
 }
@@ -25,21 +23,58 @@ else
 {
     <div class="detail-card">
         <DetailGrid>
-            <DetailField Label="Identifier">@RadzenODataQuery.IdentifierOrShort(item.Identifier, item.Id)</DetailField>
-            <DetailField Label="Amount">@item.Amount.ToString("C")</DetailField>
-            <DetailField Label="Type">@item.PaymentType</DetailField>
-            <DetailField Label="Status">@item.Status</DetailField>
-            <DetailField Label="Book date">@item.BookDate</DetailField>
-            <DetailField Label="Received date">@item.ReceivedDate</DetailField>
-            <DetailField Label="Contact">
-                <EntityLink Path="contacts" Id="item.ContactId" Text="@item.ContactFullName" />
-            </DetailField>
-            <DetailField Label="Payment schedule">
-                <EntityLink Path="payment-schedules" Id="item.PaymentScheduleId" Text="@RadzenODataQuery.IdentifierOrShort(item.PaymentScheduleIdentifier, item.PaymentScheduleId)" />
+            @if (!IsNew)
+            {
+                <DetailField Label="Identifier" Locked>@form.Identifier</DetailField>
+                <DetailField Label="Status">
+                    <select class="form-select" @bind="form.Status">
+                        @foreach (var status in Enum.GetValues<TransactionStatus>())
+                        {
+                            <option value="@status">@status</option>
+                        }
+                    </select>
+                </DetailField>
+            }
+            <DetailField Label="Contact" Locked="@(!IsNew)">
+                <ContactLookup @bind-ContactId="form.ContactId" @bind-ContactId:after="OnContactChanged" Label="@form.ContactName" Disabled="@(!IsNew)" />
             </DetailField>
             <DetailField Label="Payment method">
-                <EntityLink Path="payment-methods" Id="item.PaymentMethodId" Text="@item.PaymentMethodDisplayName" />
+                <PaymentMethodSelect @key="form.ContactId"
+                                     ContactId="form.ContactId"
+                                     @bind-PaymentMethodId="form.PaymentMethodId"
+                                     SelectedChanged="OnMethodSelected" />
             </DetailField>
+            <DetailField Label="Payment schedule" Locked="@(!IsNew)">
+                <PaymentScheduleLookup @key="form.ContactId"
+                                       ContactId="form.ContactId"
+                                       PaymentMethodId="form.PaymentMethodId"
+                                       @bind-PaymentScheduleId="form.PaymentScheduleId"
+                                       SelectedChanged="OnScheduleSelected"
+                                       Label="@form.PaymentScheduleName"
+                                       Disabled="@(!IsNew)" />
+            </DetailField>
+            <DetailField Label="Amount"><input class="form-control" type="number" min="0.01" step="0.01" @bind="form.Amount" /></DetailField>
+            <DetailField Label="Payment type" Locked>
+                <select class="form-select" @bind="form.PaymentType" disabled>
+                    @foreach (var type in Enum.GetValues<PaymentType>())
+                    {
+                        <option value="@type">@type</option>
+                    }
+                </select>
+            </DetailField>
+            <DetailField Label="Book date">
+                <input class="form-control" type="date" @bind="form.BookDate" />
+            </DetailField>
+            <DetailField Label="Received date"><input class="form-control" type="date" @bind="form.ReceivedDate" /></DetailField>
+            @if (!IsNew)
+            {
+                <DetailField Label="Journal" Locked>
+                    <EntityLink Path="journals" Id="form.JournalId" Text="@form.JournalName" />
+                </DetailField>
+                <DetailField Label="Receipt" Locked>
+                    <EntityLink Path="receipts" Id="form.ReceiptId" Text="@form.ReceiptName" />
+                </DetailField>
+            }
         </DetailGrid>
     </div>
 }
@@ -47,26 +82,173 @@ else
 @code {
     [Parameter] public Guid Id { get; set; }
 
-    private bool loading = true;
+    private bool IsNew => Id == Guid.Empty;
+
+    private bool loading;
+    private bool saving;
+    private bool missing;
     private string? error;
-    private TransactionDto? item;
+    private TxnForm form = new();
 
     protected override async Task OnParametersSetAsync()
     {
+        if (IsNew)
+        {
+            form = new TxnForm();
+            loading = false;
+            missing = false;
+            error = null;
+            return;
+        }
+
         loading = true;
         try
         {
-            item = await Api.GetTransactionAsync(Id);
+            var item = await Api.GetTransactionAsync(Id);
+            if (item is null)
+            {
+                missing = true;
+                return;
+            }
+
+            form = TxnForm.From(item);
+            missing = false;
             error = null;
         }
         catch (Exception exception)
         {
             error = exception.Message;
-            item = null;
+            missing = true;
         }
         finally
         {
             loading = false;
         }
+    }
+
+    private void OnContactChanged()
+    {
+        if (IsNew)
+        {
+            form.PaymentMethodId = Guid.Empty;
+            form.PaymentMethodName = null;
+            form.PaymentScheduleId = Guid.Empty;
+            form.PaymentScheduleName = null;
+        }
+    }
+
+    private void OnMethodSelected(PaymentMethodDto? method)
+    {
+        if (method is null)
+        {
+            return;
+        }
+
+        form.PaymentType = method.PaymentType;
+        form.PaymentMethodName = method.DisplayName;
+        if (IsNew)
+        {
+            form.PaymentScheduleId = Guid.Empty;
+            form.PaymentScheduleName = null;
+        }
+    }
+
+    private void OnScheduleSelected(PaymentScheduleDto? schedule)
+    {
+        form.PaymentScheduleName = schedule is null
+            ? null
+            : RadzenODataQuery.IdentifierOrShort(schedule.Identifier, schedule.Id);
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        try
+        {
+            if (IsNew)
+            {
+                if (form.ContactId == Guid.Empty)
+                {
+                    error = "Search for and select a contact.";
+                    return;
+                }
+
+                if (form.PaymentMethodId == Guid.Empty)
+                {
+                    error = "Search for and select a payment method.";
+                    return;
+                }
+
+                var id = await Api.CreateTransactionAsync(
+                    form.Amount,
+                    form.PaymentScheduleId == Guid.Empty ? null : form.PaymentScheduleId,
+                    form.ContactId,
+                    form.PaymentMethodId,
+                    form.PaymentType,
+                    form.BookDate,
+                    form.ReceivedDate);
+                Nav.NavigateTo($"transactions/{id}");
+                return;
+            }
+
+            await Api.UpdateTransactionAsync(
+                Id,
+                form.Amount,
+                form.PaymentMethodId,
+                form.PaymentType,
+                form.BookDate,
+                form.ReceivedDate,
+                form.PaymentScheduleId == Guid.Empty ? null : form.PaymentScheduleId,
+                form.Status);
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private sealed class TxnForm
+    {
+        public string Identifier { get; set; } = string.Empty;
+        public TransactionStatus Status { get; set; } = TransactionStatus.Succeeded;
+        public Guid ContactId { get; set; }
+        public string? ContactName { get; set; }
+        public Guid PaymentMethodId { get; set; }
+        public string? PaymentMethodName { get; set; }
+        public Guid PaymentScheduleId { get; set; }
+        public string? PaymentScheduleName { get; set; }
+        public decimal Amount { get; set; } = 50m;
+        public PaymentType PaymentType { get; set; } = PaymentType.Bank;
+        public DateOnly BookDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+        public DateOnly ReceivedDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+        public Guid? JournalId { get; set; }
+        public string? JournalName { get; set; }
+        public Guid? ReceiptId { get; set; }
+        public string? ReceiptName { get; set; }
+
+        public static TxnForm From(TransactionDto item) => new()
+        {
+            Identifier = RadzenODataQuery.IdentifierOrShort(item.Identifier, item.Id),
+            Status = item.Status,
+            ContactId = item.ContactId,
+            ContactName = item.ContactFullName,
+            PaymentMethodId = item.PaymentMethodId,
+            PaymentMethodName = item.PaymentMethodDisplayName,
+            PaymentScheduleId = item.PaymentScheduleId ?? Guid.Empty,
+            PaymentScheduleName = RadzenODataQuery.IdentifierOrShort(item.PaymentScheduleIdentifier, item.PaymentScheduleId),
+            Amount = item.Amount,
+            PaymentType = item.PaymentType,
+            BookDate = item.BookDate,
+            ReceivedDate = item.ReceivedDate,
+            JournalId = item.JournalId,
+            JournalName = RadzenODataQuery.IdentifierOrShort(item.JournalIdentifier, item.JournalId),
+            ReceiptId = item.ReceiptId,
+            ReceiptName = RadzenODataQuery.IdentifierOrShort(item.ReceiptIdentifier, item.ReceiptId),
+        };
     }
 }

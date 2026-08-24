@@ -1,0 +1,239 @@
+@typeparam TItem
+@implements IDisposable
+
+<div class="lookup-search">
+    @if (hasSelection)
+    {
+        <div class="lookup-search-selected">
+            @if (!string.IsNullOrWhiteSpace(LinkPath))
+            {
+                <EntityLink Path="@LinkPath" Id="Value" Text="@DisplayTitle" />
+            }
+            else
+            {
+                <div class="form-control lookup-search-value">@DisplayTitle</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(DisplaySubtitle))
+            {
+                <span class="lookup-search-extra">@DisplaySubtitle</span>
+            }
+            @if (!Disabled)
+            {
+                <button type="button" class="btn btn-link btn-sm p-0" @onclick="ClearSelected">Change</button>
+            }
+        </div>
+    }
+    else
+    {
+        <input class="form-control"
+               value="@query"
+               placeholder="@Placeholder"
+               autocomplete="off"
+               disabled="@Disabled"
+               @oninput="OnQueryChanged" />
+
+        @if (Disabled)
+        {
+            @if (!string.IsNullOrWhiteSpace(DisabledText))
+            {
+                <div class="form-text">@DisabledText</div>
+            }
+        }
+        else if (query.Trim().Length is > 0 and < AdminLookups.SearchMinLength)
+        {
+            <div class="form-text">Type at least @AdminLookups.SearchMinLength characters to search.</div>
+        }
+        else if (searching)
+        {
+            <div class="form-text">Searching…</div>
+        }
+        else if (matches.Count > 0)
+        {
+            <ul class="lookup-search-results">
+                @foreach (var match in matches)
+                {
+                    <li>
+                        <button type="button" @onclick="() => SelectAsync(match)">
+                            <span>@Title(match)</span>
+                            @if (!string.IsNullOrWhiteSpace(Subtitle?.Invoke(match)))
+                            {
+                                <span class="lookup-search-extra">@Subtitle(match)</span>
+                            }
+                        </button>
+                    </li>
+                }
+            </ul>
+        }
+        else if (searched)
+        {
+            <div class="form-text">@EmptyText</div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid Value { get; set; }
+
+    [Parameter] public EventCallback<Guid> ValueChanged { get; set; }
+
+    [Parameter] public EventCallback<TItem?> SelectedChanged { get; set; }
+
+    [Parameter] public string? Label { get; set; }
+
+    [Parameter] public string? SecondaryLabel { get; set; }
+
+    [Parameter] public string Placeholder { get; set; } = "Type at least 3 characters to search";
+
+    [Parameter] public string EmptyText { get; set; } = "No matches.";
+
+    [Parameter] public string DisabledText { get; set; } = "Search a related record first.";
+
+    [Parameter] public bool Disabled { get; set; }
+
+    [Parameter] public string? LinkPath { get; set; }
+
+    [Parameter] public Func<string, CancellationToken, Task<IReadOnlyList<TItem>>> Search { get; set; } = default!;
+
+    [Parameter] public Func<TItem, Guid> Id { get; set; } = default!;
+
+    [Parameter] public Func<TItem, string> Title { get; set; } = default!;
+
+    [Parameter] public Func<TItem, string?>? Subtitle { get; set; }
+
+    private string query = string.Empty;
+    private bool searching;
+    private bool searched;
+    private bool hasSelection;
+    private Guid boundValue;
+    private TItem? selected;
+    private IReadOnlyList<TItem> matches = [];
+    private CancellationTokenSource? searchCts;
+
+    private string DisplayTitle => selected is not null
+        ? Title(selected)
+        : (string.IsNullOrWhiteSpace(Label) ? RadzenODataQuery.ShortId(Value) : Label);
+
+    private string? DisplaySubtitle => selected is not null
+        ? Subtitle?.Invoke(selected)
+        : SecondaryLabel;
+
+    protected override void OnParametersSet()
+    {
+        if (Value == boundValue)
+        {
+            return;
+        }
+
+        boundValue = Value;
+        matches = [];
+        searched = false;
+        searching = false;
+        if (Value == Guid.Empty)
+        {
+            hasSelection = false;
+            selected = default;
+            query = string.Empty;
+            return;
+        }
+
+        hasSelection = true;
+        selected = default;
+        query = string.Empty;
+    }
+
+    private async Task OnQueryChanged(ChangeEventArgs args)
+    {
+        if (Disabled)
+        {
+            return;
+        }
+
+        query = args.Value?.ToString() ?? string.Empty;
+        selected = default;
+        hasSelection = false;
+        searched = false;
+        matches = [];
+        await SearchAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        searchCts?.Cancel();
+        searchCts?.Dispose();
+        searchCts = new CancellationTokenSource();
+        var token = searchCts.Token;
+
+        var term = query.Trim();
+        if (term.Length < AdminLookups.SearchMinLength || Search is null)
+        {
+            searching = false;
+            return;
+        }
+
+        searching = true;
+        try
+        {
+            await Task.Delay(250, token);
+            var result = await Search(term, token);
+            if (token.IsCancellationRequested)
+            {
+                return;
+            }
+
+            matches = result;
+            searched = true;
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception)
+        {
+            matches = [];
+            searched = true;
+        }
+        finally
+        {
+            if (!token.IsCancellationRequested)
+            {
+                searching = false;
+            }
+        }
+    }
+
+    private async Task SelectAsync(TItem item)
+    {
+        searchCts?.Cancel();
+        selected = item;
+        query = string.Empty;
+        matches = [];
+        searched = false;
+        searching = false;
+        hasSelection = true;
+        await SetValueAsync(Id(item), item);
+    }
+
+    private async Task ClearSelected()
+    {
+        selected = default;
+        query = string.Empty;
+        matches = [];
+        searched = false;
+        hasSelection = false;
+        await SetValueAsync(Guid.Empty, default);
+    }
+
+    private async Task SetValueAsync(Guid id, TItem? item)
+    {
+        boundValue = id;
+        Value = id;
+        await ValueChanged.InvokeAsync(id);
+        await SelectedChanged.InvokeAsync(item);
+    }
+
+    public void Dispose()
+    {
+        searchCts?.Cancel();
+        searchCts?.Dispose();
+    }
+}

@@ -35,7 +35,7 @@ public class Receipt : Entity, IAggregateRoot
     {
         Validate(contactId, transactionId, paymentScheduleId);
         var id = Guid.NewGuid();
-        return new Receipt
+        var receipt = new Receipt
         {
             Id = id,
             Identifier = RecordIdentifier.Receipt(DateOnly.FromDateTime(DateTime.UtcNow), id),
@@ -43,6 +43,14 @@ public class Receipt : Entity, IAggregateRoot
             TransactionId = transactionId,
             PaymentScheduleId = paymentScheduleId,
         };
+
+        receipt.AddDomainEvent(new ReceiptCreatedDomainEvent(
+            receipt.Id,
+            receipt.Identifier,
+            receipt.ContactId,
+            receipt.TransactionId,
+            receipt.PaymentScheduleId));
+        return receipt;
     }
 
     public void AssignTransaction(Guid transactionId, Guid? paymentScheduleId = null)
@@ -102,7 +110,7 @@ public class Receipt : Entity, IAggregateRoot
             Identifier = RecordIdentifier.Receipt(DateOnly.FromDateTime(DateTime.UtcNow), Id);
         }
 
-        AddDomainEvent(new DonationReceiptGeneratedDomainEvent(Id, Identifier, ContactId, TransactionId));
+        AddDomainEvent(new ReceiptGeneratedDomainEvent(Id, Identifier, ContactId, TransactionId));
     }
 
     public void ClearDocument()

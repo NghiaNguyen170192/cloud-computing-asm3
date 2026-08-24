@@ -1,0 +1,52 @@
+@inject DonationApiClient Api
+
+<RelatedList Title="Payment methods" Count="@count" Loading="@loading" Error="@error" EmptyText="No payment methods.">
+    <Header>
+        <tr>
+            <th>Method</th>
+            <th>Type</th>
+        </tr>
+    </Header>
+    <ChildContent>
+        @foreach (var method in items)
+        {
+            <tr>
+                <td><EntityLink Path="payment-methods" Id="method.Id" Text="@method.DisplayName" /></td>
+                <td>@method.PaymentType</td>
+            </tr>
+        }
+    </ChildContent>
+</RelatedList>
+
+@code {
+    [Parameter] public Guid ContactId { get; set; }
+
+    private bool loading = true;
+    private string? error;
+    private int count;
+    private IReadOnlyList<PaymentMethodDto> items = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        try
+        {
+            var result = await Api.QueryPaymentMethodsAsync(
+                AdminLookups.Related("Id,DisplayName,PaymentType", orderBy: "DisplayName"),
+                ContactId);
+            items = result.Value;
+            count = result.Count;
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+            items = [];
+            count = 0;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

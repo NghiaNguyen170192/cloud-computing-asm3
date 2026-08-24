@@ -1,13 +1,11 @@
+@page "/payment-schedules/new"
 @page "/payment-schedules/{Id:guid}"
 @inject DonationApiClient Api
 @inject NavigationManager Nav
 
-<PageTitle>Payment schedule — Donation admin</PageTitle>
+<PageTitle>@(IsNew ? "New payment schedule" : "Payment schedule") — Donation admin</PageTitle>
 
-<div class="d-flex align-items-center gap-3 mb-3">
-    <h1 class="mb-0">Payment schedule</h1>
-    <RadzenButton Text="Back to list" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@(() => Nav.NavigateTo("payment-schedules"))" />
-</div>
+<EntityFormBar Title="@(IsNew ? "New payment schedule" : "Payment schedule")" Busy="@saving" Save="@SaveAsync" Back="@(() => Nav.NavigateTo("payment-schedules"))" />
 
 @if (!string.IsNullOrWhiteSpace(error))
 {
@@ -17,7 +15,7 @@ else if (loading)
 {
     <p>Loading…</p>
 }
-else if (item is null)
+else if (!IsNew && missing)
 {
     <p class="text-muted">Payment schedule not found.</p>
 }
@@ -25,45 +23,194 @@ else
 {
     <div class="detail-card">
         <DetailGrid>
-            <DetailField Label="Identifier">@RadzenODataQuery.IdentifierOrShort(item.Identifier, item.Id)</DetailField>
-            <DetailField Label="Amount">@item.Amount.ToString("C")</DetailField>
-            <DetailField Label="Payment type">@item.PaymentType</DetailField>
-            <DetailField Label="Book date">@item.BookDate</DetailField>
-            <DetailField Label="Interval">@item.RecurringInterval</DetailField>
-            <DetailField Label="Recurring">@item.IsRecurring</DetailField>
-            <DetailField Label="Contact">
-                <EntityLink Path="contacts" Id="item.ContactId" Text="@item.ContactFullName" />
+            @if (!IsNew)
+            {
+                <DetailField Label="Identifier" Locked>@form.Identifier</DetailField>
+            }
+            <DetailField Label="Contact" Locked="@(!IsNew)">
+                <ContactLookup @bind-ContactId="form.ContactId" @bind-ContactId:after="OnContactChanged" Label="@form.ContactName" Disabled="@(!IsNew)" />
             </DetailField>
             <DetailField Label="Payment method">
-                <EntityLink Path="payment-methods" Id="item.PaymentMethodId" Text="@item.PaymentMethodDisplayName" />
+                <PaymentMethodSelect @key="form.ContactId"
+                                     ContactId="form.ContactId"
+                                     @bind-PaymentMethodId="form.PaymentMethodId"
+                                     SelectedChanged="OnMethodSelected" />
+            </DetailField>
+            <DetailField Label="Amount"><input class="form-control" type="number" min="0.01" step="0.01" @bind="form.Amount" /></DetailField>
+            <DetailField Label="Book date" Locked="@(!IsNew)">
+                <input class="form-control" type="date" @bind="form.BookDate" disabled="@(!IsNew)" />
+            </DetailField>
+            <DetailField Label="Interval">
+                <select class="form-select" @bind="form.RecurringInterval">
+                    @foreach (var interval in RecurringIntervals)
+                    {
+                        <option value="@interval">@interval</option>
+                    }
+                </select>
+            </DetailField>
+            <DetailField Label="Payment type" Locked>
+                <select class="form-select" @bind="form.PaymentType" disabled>
+                    @foreach (var type in Enum.GetValues<PaymentType>())
+                    {
+                        <option value="@type">@type</option>
+                    }
+                </select>
             </DetailField>
         </DetailGrid>
     </div>
+    @if (!IsNew)
+    {
+        <div class="related-stack">
+            <RelatedTransactions PaymentScheduleId="Id" />
+            <RelatedReceipts PaymentScheduleId="Id" />
+        </div>
+    }
 }
 
 @code {
     [Parameter] public Guid Id { get; set; }
 
-    private bool loading = true;
+    private static readonly RecurringInterval[] RecurringIntervals = Enum.GetValues<RecurringInterval>()
+        .Where(interval => interval != RecurringInterval.OneOff)
+        .ToArray();
+
+    private bool IsNew => Id == Guid.Empty;
+
+    private bool loading;
+    private bool saving;
+    private bool missing;
     private string? error;
-    private PaymentScheduleDto? item;
+    private ScheduleForm form = new();
 
     protected override async Task OnParametersSetAsync()
     {
+        if (IsNew)
+        {
+            form = new ScheduleForm();
+            loading = false;
+            missing = false;
+            error = null;
+            return;
+        }
+
         loading = true;
         try
         {
-            item = await Api.GetPaymentScheduleAsync(Id);
+            var item = await Api.GetPaymentScheduleAsync(Id);
+            if (item is null)
+            {
+                missing = true;
+                return;
+            }
+
+            form = ScheduleForm.From(item);
+            missing = false;
             error = null;
         }
         catch (Exception exception)
         {
             error = exception.Message;
-            item = null;
+            missing = true;
         }
         finally
         {
             loading = false;
         }
+    }
+
+    private void OnContactChanged()
+    {
+        if (IsNew)
+        {
+            form.PaymentMethodId = Guid.Empty;
+            form.PaymentMethodName = null;
+            form.PaymentType = PaymentType.Bank;
+        }
+    }
+
+    private void OnMethodSelected(PaymentMethodDto? method)
+    {
+        if (method is null)
+        {
+            return;
+        }
+
+        form.PaymentType = method.PaymentType;
+        form.PaymentMethodName = method.DisplayName;
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        try
+        {
+            if (form.ContactId == Guid.Empty)
+            {
+                error = "Search for and select a contact.";
+                return;
+            }
+
+            if (form.PaymentMethodId == Guid.Empty)
+            {
+                error = "Search for and select a payment method.";
+                return;
+            }
+
+            if (IsNew)
+            {
+                var id = await Api.CreatePaymentScheduleAsync(
+                    form.ContactId,
+                    form.PaymentMethodId,
+                    form.Amount,
+                    form.BookDate,
+                    form.RecurringInterval,
+                    form.PaymentType);
+                Nav.NavigateTo($"payment-schedules/{id}");
+                return;
+            }
+
+            await Api.UpdatePaymentScheduleAsync(
+                Id,
+                form.PaymentMethodId,
+                form.Amount,
+                form.BookDate,
+                form.RecurringInterval,
+                form.PaymentType);
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private sealed class ScheduleForm
+    {
+        public string Identifier { get; set; } = string.Empty;
+        public Guid ContactId { get; set; }
+        public string? ContactName { get; set; }
+        public Guid PaymentMethodId { get; set; }
+        public string? PaymentMethodName { get; set; }
+        public decimal Amount { get; set; } = 50m;
+        public DateOnly BookDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+        public RecurringInterval RecurringInterval { get; set; } = RecurringInterval.Monthly;
+        public PaymentType PaymentType { get; set; } = PaymentType.Bank;
+
+        public static ScheduleForm From(PaymentScheduleDto item) => new()
+        {
+            Identifier = RadzenODataQuery.IdentifierOrShort(item.Identifier, item.Id),
+            ContactId = item.ContactId,
+            ContactName = item.ContactFullName,
+            PaymentMethodId = item.PaymentMethodId,
+            PaymentMethodName = item.PaymentMethodDisplayName,
+            Amount = item.Amount,
+            BookDate = item.BookDate,
+            RecurringInterval = item.RecurringInterval,
+            PaymentType = item.PaymentType,
+        };
     }
 }

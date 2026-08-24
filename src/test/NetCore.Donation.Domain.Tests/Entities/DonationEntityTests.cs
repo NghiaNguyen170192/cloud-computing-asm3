@@ -26,6 +26,7 @@ public class DonationEntityTests
         Assert.IsTrue(contact.IsActive);
         Assert.IsFalse(contact.DoNotEmail);
         Assert.IsFalse(contact.DoNotSms);
+        Assert.IsInstanceOfType(contact.DomainEvents.Single(), typeof(ContactCreatedDomainEvent));
     }
 
     [TestMethod]
@@ -146,10 +147,14 @@ public class DonationEntityTests
         var receipt = Receipt.Create(Guid.NewGuid());
 
         Assert.IsNull(receipt.TransactionId);
+        Assert.IsInstanceOfType(receipt.DomainEvents.Single(), typeof(ReceiptCreatedDomainEvent));
+        receipt.ClearDomainEvents();
+        receipt.MarkGenerated();
+        Assert.IsInstanceOfType(receipt.DomainEvents.Single(), typeof(ReceiptGeneratedDomainEvent));
     }
 
     [TestMethod]
-    public void TransactionCreatePending_RaisesTransactionPending()
+    public void TransactionCreatePending_RaisesTransactionCreated()
     {
         var transaction = Transaction.CreatePending(
             25,
@@ -161,11 +166,30 @@ public class DonationEntityTests
             isRecurring: false);
 
         Assert.AreEqual(TransactionStatus.Pending, transaction.Status);
+        Assert.IsInstanceOfType(transaction.DomainEvents.Single(), typeof(TransactionCreatedDomainEvent));
+    }
+
+    [TestMethod]
+    public void TransactionTransitionToPending_RaisesTransactionPending()
+    {
+        var transaction = Transaction.CreatePending(
+            25,
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            PaymentType.CreditCard,
+            new DateOnly(2026, 8, 16),
+            isRecurring: false);
+        transaction.ClearDomainEvents();
+
+        transaction.TransitionToPending();
+
+        Assert.AreEqual(TransactionStatus.Pending, transaction.Status);
         Assert.IsInstanceOfType(transaction.DomainEvents.Single(), typeof(TransactionPendingDomainEvent));
     }
 
     [TestMethod]
-    public void TransactionMarkSucceeded_RaisesTransactionSucceeded()
+    public void TransactionMarkSucceeded_RaisesTransactionCompleted()
     {
         var transaction = Transaction.CreatePending(
             25,
@@ -180,7 +204,7 @@ public class DonationEntityTests
         transaction.MarkSucceeded();
 
         Assert.AreEqual(TransactionStatus.Succeeded, transaction.Status);
-        Assert.IsInstanceOfType(transaction.DomainEvents.Single(), typeof(TransactionSucceededDomainEvent));
+        Assert.IsInstanceOfType(transaction.DomainEvents.Single(), typeof(TransactionCompletedDomainEvent));
     }
 
     [TestMethod]
@@ -203,7 +227,7 @@ public class DonationEntityTests
     }
 
     [TestMethod]
-    public void TransactionCreate_DefaultsToSucceededWithoutPendingEvent()
+    public void TransactionCreate_RaisesTransactionCreatedAsPending()
     {
         var transaction = Transaction.Create(
             25,
@@ -214,12 +238,12 @@ public class DonationEntityTests
             new DateOnly(2026, 8, 16),
             new DateOnly(2026, 8, 16));
 
-        Assert.AreEqual(TransactionStatus.Succeeded, transaction.Status);
-        Assert.IsEmpty(transaction.DomainEvents);
+        Assert.AreEqual(TransactionStatus.Pending, transaction.Status);
+        Assert.IsInstanceOfType(transaction.DomainEvents.Single(), typeof(TransactionCreatedDomainEvent));
     }
 
     [TestMethod]
-    public void PaymentScheduleRaiseDonationCreated_RaisesDonationCreated()
+    public void PaymentScheduleCreate_RaisesPaymentScheduleCreated()
     {
         var schedule = PaymentSchedule.Create(
             Guid.NewGuid(),
@@ -228,9 +252,7 @@ public class DonationEntityTests
             new DateOnly(2026, 8, 16),
             RecurringInterval.Monthly);
 
-        schedule.RaiseDonationCreated();
-
-        var domainEvent = (DonationCreatedDomainEvent)schedule.DomainEvents.Single();
+        var domainEvent = (PaymentScheduleCreatedDomainEvent)schedule.DomainEvents.Single();
         Assert.IsTrue(domainEvent.IsRecurring);
         Assert.AreEqual(RecurringInterval.Monthly, domainEvent.RecurringInterval);
         Assert.AreEqual(PaymentType.Bank, domainEvent.PaymentType);

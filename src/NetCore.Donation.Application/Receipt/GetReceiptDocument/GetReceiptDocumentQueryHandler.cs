@@ -1,4 +1,5 @@
 using MediatR;
+using NetCore.Donation.Application.Receipt;
 using NetCore.Donation.Domain.IRepositories;
 using NetCore.Donation.Domain.Storage;
 
@@ -26,10 +27,10 @@ public class GetReceiptDocumentQueryHandler(
         }
 
         var fileName = string.IsNullOrWhiteSpace(receipt.DocumentFileName)
-            ? $"receipt-{receipt.Id:N}.pdf"
+            ? ReceiptDocumentService.PdfFileName(receipt.Identifier)
             : receipt.DocumentFileName;
         var contentType = string.IsNullOrWhiteSpace(receipt.DocumentContentType)
-            ? "application/pdf"
+            ? ReceiptDocumentService.PdfContentType
             : receipt.DocumentContentType;
         var sizeBytes = receipt.DocumentSizeBytes ?? stream.Length;
 

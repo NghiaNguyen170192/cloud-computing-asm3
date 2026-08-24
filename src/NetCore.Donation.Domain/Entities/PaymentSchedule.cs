@@ -36,7 +36,7 @@ public class PaymentSchedule : Entity, IAggregateRoot
     {
         Validate(contactId, paymentMethodId, amount, recurringInterval, paymentType);
         var id = Guid.NewGuid();
-        return new PaymentSchedule
+        var paymentSchedule = new PaymentSchedule
         {
             Id = id,
             Identifier = RecordIdentifier.PaymentSchedule(bookDate, id),
@@ -47,29 +47,17 @@ public class PaymentSchedule : Entity, IAggregateRoot
             PaymentType = paymentType,
             RecurringInterval = recurringInterval,
         };
-    }
 
-    public void RaiseDonationCreated()
-    {
-        if (Id == Guid.Empty)
-        {
-            Id = Guid.NewGuid();
-        }
-
-        if (string.IsNullOrWhiteSpace(Identifier))
-        {
-            Identifier = RecordIdentifier.PaymentSchedule(BookDate, Id);
-        }
-
-        AddDomainEvent(new DonationCreatedDomainEvent(
-            Id,
-            Identifier,
-            ContactId,
-            PaymentMethodId,
-            Amount,
-            PaymentType,
+        paymentSchedule.AddDomainEvent(new PaymentScheduleCreatedDomainEvent(
+            paymentSchedule.Id,
+            paymentSchedule.Identifier,
+            paymentSchedule.ContactId,
+            paymentSchedule.PaymentMethodId,
+            paymentSchedule.Amount,
+            paymentSchedule.PaymentType,
             true,
-            RecurringInterval));
+            paymentSchedule.RecurringInterval));
+        return paymentSchedule;
     }
 
     public void UpdateSchedule(

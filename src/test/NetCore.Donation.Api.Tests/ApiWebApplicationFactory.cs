@@ -34,7 +34,7 @@ public class ApiWebApplicationFactory : WebApplicationFactory<Program>
             services.RemoveAll<IReceiptDocumentGenerator>();
             services.RemoveAll<Amazon.S3.IAmazonS3>();
             services.AddSingleton<IReceiptDocumentStorage, InMemoryReceiptDocumentStorage>();
-            services.AddSingleton<IReceiptDocumentGenerator, BlankReceiptDocumentGenerator>();
+            services.AddSingleton<IReceiptDocumentGenerator, ReceiptPdfDocumentGenerator>();
             services.RemoveAll<IHostedService>();
         });
     }

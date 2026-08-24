@@ -3,7 +3,7 @@ using NetCore.Donation.Domain.Enums;
 
 namespace NetCore.Donation.Domain.Events;
 
-public sealed record DonationCreatedDomainEvent(
+public sealed record PaymentScheduleCreatedDomainEvent(
     Guid PaymentScheduleId,
     string Identifier,
     Guid ContactId,

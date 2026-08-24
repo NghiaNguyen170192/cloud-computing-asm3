@@ -1,0 +1,75 @@
+@inject DonationApiClient Api
+
+<RelatedList Title="Transactions" Count="@count" Loading="@loading" Error="@error" EmptyText="No transactions.">
+    <Header>
+        <tr>
+            <th>Transaction</th>
+            <th>Book date</th>
+            <th>Amount</th>
+            <th>Status</th>
+            <th>Type</th>
+            @if (PaymentScheduleId is null)
+            {
+                <th>Schedule</th>
+            }
+        </tr>
+    </Header>
+    <ChildContent>
+        @foreach (var transaction in items)
+        {
+            <tr>
+                <td><EntityLink Path="transactions" Id="transaction.Id" Text="@RadzenODataQuery.IdentifierOrShort(transaction.Identifier, transaction.Id)" /></td>
+                <td>@transaction.BookDate</td>
+                <td>@transaction.Amount.ToString("C")</td>
+                <td>@transaction.Status</td>
+                <td>@transaction.PaymentType</td>
+                @if (PaymentScheduleId is null)
+                {
+                    <td><EntityLink Path="payment-schedules" Id="transaction.PaymentScheduleId" Text="@RadzenODataQuery.IdentifierOrShort(transaction.PaymentScheduleIdentifier, transaction.PaymentScheduleId)" /></td>
+                }
+            </tr>
+        }
+    </ChildContent>
+</RelatedList>
+
+@code {
+    [Parameter] public Guid? ContactId { get; set; }
+
+    [Parameter] public Guid? PaymentScheduleId { get; set; }
+
+    [Parameter] public Guid? PaymentMethodId { get; set; }
+
+    private bool loading = true;
+    private string? error;
+    private int count;
+    private IReadOnlyList<TransactionDto> items = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        try
+        {
+            var filter = PaymentMethodId is { } methodId ? AdminLookups.Eq("PaymentMethodId", methodId) : null;
+            var result = await Api.QueryTransactionsAsync(
+                AdminLookups.Related(
+                    "Id,Identifier,Amount,BookDate,PaymentType,Status,PaymentScheduleId,PaymentScheduleIdentifier",
+                    filter,
+                    "BookDate desc"),
+                ContactId,
+                PaymentScheduleId);
+            items = result.Value;
+            count = result.Count;
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+            items = [];
+            count = 0;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

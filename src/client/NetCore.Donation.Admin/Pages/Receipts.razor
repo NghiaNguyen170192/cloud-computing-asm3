@@ -1,5 +1,6 @@
 @page "/receipts"
 @inject DonationApiClient Api
+@inject NavigationManager Nav
 @inject IJSRuntime JS
 
 <PageTitle>Receipts — Donation admin</PageTitle>
@@ -13,9 +14,9 @@
 }
 
 <RadzenStack Gap="1rem" class="list-page">
-    <FilterToolbar @bind-Auto="@auto" Apply="@ApplyFilter" />
+    <FilterToolbar Apply="@ApplyFilter" Add="@(() => Nav.NavigateTo("receipts/new"))" AddText="Add receipt" />
 
-    <RadzenDataFilter @ref="dataFilter" Auto="@auto" TItem="ReceiptDto" ViewChanged="@(_ => grid.Reload())">
+    <RadzenDataFilter @ref="dataFilter" Auto="false" TItem="ReceiptDto" ViewChanged="@(_ => grid.Reload())">
         <Properties>
             <RadzenDataFilterProperty Property="@nameof(ReceiptDto.Identifier)" Title="Identifier" />
             <RadzenDataFilterProperty Property="@nameof(ReceiptDto.HasDocument)" Title="Has document" />
@@ -68,7 +69,6 @@
 
 @code {
     private const string Select = "Id,Identifier,ContactId,ContactFullName,TransactionId,TransactionIdentifier,PaymentScheduleId,PaymentScheduleIdentifier,DocumentFileName,HasDocument";
-    private bool auto = true;
     private bool loading;
     private string? error;
     private int count;
@@ -104,11 +104,11 @@
     {
         try
         {
-            var pdf = await Api.GetReceiptPdfAsync(receipt.Id);
+            var bytes = await Api.GetReceiptDocumentAsync(receipt.Id);
             var fileName = string.IsNullOrWhiteSpace(receipt.DocumentFileName)
-                ? $"receipt-{receipt.Id:N}.pdf"
+                ? receipt.Identifier
                 : receipt.DocumentFileName;
-            await JS.InvokeVoidAsync("downloadFile", fileName, "application/pdf", pdf);
+            await JS.InvokeVoidAsync("downloadFile", fileName, "application/pdf", bytes);
             error = null;
         }
         catch (Exception exception)

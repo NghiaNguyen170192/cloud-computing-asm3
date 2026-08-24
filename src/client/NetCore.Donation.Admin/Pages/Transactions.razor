@@ -1,5 +1,6 @@
 @page "/transactions"
 @inject DonationApiClient Api
+@inject NavigationManager Nav
 
 <PageTitle>Transactions — Donation admin</PageTitle>
 
@@ -12,9 +13,9 @@
 }
 
 <RadzenStack Gap="1rem" class="list-page">
-    <FilterToolbar @bind-Auto="@auto" Apply="@ApplyFilter" />
+    <FilterToolbar Apply="@ApplyFilter" Add="@(() => Nav.NavigateTo("transactions/new"))" AddText="Add transaction" />
 
-    <RadzenDataFilter @ref="dataFilter" Auto="@auto" TItem="TransactionDto" ViewChanged="@(_ => grid.Reload())">
+    <RadzenDataFilter @ref="dataFilter" Auto="false" TItem="TransactionDto" ViewChanged="@(_ => grid.Reload())">
         <Properties>
             <RadzenDataFilterProperty Property="@nameof(TransactionDto.Identifier)" Title="Identifier" />
             <RadzenDataFilterProperty Property="@nameof(TransactionDto.Amount)" Title="Amount" />
@@ -24,6 +25,8 @@
             <RadzenDataFilterProperty Property="@nameof(TransactionDto.ContactFullName)" Title="Contact" />
             <RadzenDataFilterProperty Property="@nameof(TransactionDto.PaymentScheduleIdentifier)" Title="Schedule" />
             <RadzenDataFilterProperty Property="@nameof(TransactionDto.PaymentMethodDisplayName)" Title="Method" />
+            <RadzenDataFilterProperty Property="@nameof(TransactionDto.JournalIdentifier)" Title="Journal" />
+            <RadzenDataFilterProperty Property="@nameof(TransactionDto.ReceiptIdentifier)" Title="Receipt" />
         </Properties>
     </RadzenDataFilter>
 
@@ -55,13 +58,22 @@
                     <EntityLink Path="payment-methods" Id="transaction.PaymentMethodId" Text="@transaction.PaymentMethodDisplayName" />
                 </Template>
             </RadzenDataGridColumn>
+            <RadzenDataGridColumn Property="@nameof(TransactionDto.JournalIdentifier)" Title="Journal">
+                <Template Context="transaction">
+                    <EntityLink Path="journals" Id="transaction.JournalId" Text="@RadzenODataQuery.IdentifierOrShort(transaction.JournalIdentifier, transaction.JournalId)" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Property="@nameof(TransactionDto.ReceiptIdentifier)" Title="Receipt">
+                <Template Context="transaction">
+                    <EntityLink Path="receipts" Id="transaction.ReceiptId" Text="@RadzenODataQuery.IdentifierOrShort(transaction.ReceiptIdentifier, transaction.ReceiptId)" />
+                </Template>
+            </RadzenDataGridColumn>
         </Columns>
     </RadzenDataGrid>
 </RadzenStack>
 
 @code {
-    private const string Select = "Id,Identifier,Amount,PaymentScheduleId,PaymentScheduleIdentifier,ContactId,ContactFullName,PaymentMethodId,PaymentMethodDisplayName,PaymentType,Status,BookDate,ReceivedDate";
-    private bool auto = true;
+    private const string Select = "Id,Identifier,Amount,PaymentScheduleId,PaymentScheduleIdentifier,ContactId,ContactFullName,PaymentMethodId,PaymentMethodDisplayName,PaymentType,Status,BookDate,ReceivedDate,JournalId,JournalIdentifier,ReceiptId,ReceiptIdentifier";
     private bool loading;
     private string? error;
     private int count;

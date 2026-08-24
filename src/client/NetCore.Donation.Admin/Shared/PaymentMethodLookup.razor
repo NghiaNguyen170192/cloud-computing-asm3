@@ -1,0 +1,58 @@
+@inject DonationApiClient Api
+
+<LookupSearch TItem="PaymentMethodDto"
+              Value="PaymentMethodId"
+              ValueChanged="PaymentMethodIdChanged"
+              SelectedChanged="SelectedChanged"
+              Label="@Label"
+              SecondaryLabel="@(SecondaryLabel ?? extra)"
+              Placeholder="Search payment method name"
+              EmptyText="No payment methods match that name."
+              Disabled="Disabled || ContactId == Guid.Empty"
+              DisabledText="@(ContactId == Guid.Empty ? "Search a contact first." : "")"
+              LinkPath="payment-methods"
+              Search="SearchAsync"
+              Id="method => method.Id"
+              Title="method => method.DisplayName"
+              Subtitle="method => method.PaymentType.ToString()" />
+
+@code {
+    [Parameter] public Guid ContactId { get; set; }
+
+    [Parameter] public Guid PaymentMethodId { get; set; }
+
+    [Parameter] public EventCallback<Guid> PaymentMethodIdChanged { get; set; }
+
+    [Parameter] public EventCallback<PaymentMethodDto?> SelectedChanged { get; set; }
+
+    [Parameter] public string? Label { get; set; }
+
+    [Parameter] public string? SecondaryLabel { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    private string? extra;
+    private Guid extraForId;
+
+    private Task<IReadOnlyList<PaymentMethodDto>> SearchAsync(string term, CancellationToken token)
+    {
+        if (ContactId == Guid.Empty)
+        {
+            return Task.FromResult<IReadOnlyList<PaymentMethodDto>>([]);
+        }
+
+        return LookupQuery.Values(Api.QueryPaymentMethodsAsync(AdminLookups.PaymentMethodSearch(term), ContactId, token));
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        extra = await LookupExtras.ForAsync(
+            PaymentMethodId,
+            SecondaryLabel,
+            extraForId,
+            extra,
+            id => Api.GetPaymentMethodAsync(id),
+            method => method?.PaymentType.ToString());
+        extraForId = PaymentMethodId;
+    }
+}

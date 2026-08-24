@@ -1,5 +1,6 @@
 @page "/payment-schedules"
 @inject DonationApiClient Api
+@inject NavigationManager Nav
 
 <PageTitle>Payment schedules — Donation admin</PageTitle>
 
@@ -12,9 +13,9 @@
 }
 
 <RadzenStack Gap="1rem" class="list-page">
-    <FilterToolbar @bind-Auto="@auto" Apply="@ApplyFilter" />
+    <FilterToolbar Apply="@ApplyFilter" Add="@(() => Nav.NavigateTo("payment-schedules/new"))" AddText="Add schedule" />
 
-    <RadzenDataFilter @ref="dataFilter" Auto="@auto" TItem="PaymentScheduleDto" ViewChanged="@(_ => grid.Reload())">
+    <RadzenDataFilter @ref="dataFilter" Auto="false" TItem="PaymentScheduleDto" ViewChanged="@(_ => grid.Reload())">
         <Properties>
             <RadzenDataFilterProperty Property="@nameof(PaymentScheduleDto.Identifier)" Title="Identifier" />
             <RadzenDataFilterProperty Property="@nameof(PaymentScheduleDto.Amount)" Title="Amount" />
@@ -57,7 +58,6 @@
 
 @code {
     private const string Select = "Id,Identifier,ContactId,ContactFullName,PaymentMethodId,PaymentMethodDisplayName,Amount,BookDate,PaymentType,RecurringInterval,IsRecurring";
-    private bool auto = true;
     private bool loading;
     private string? error;
     private int count;

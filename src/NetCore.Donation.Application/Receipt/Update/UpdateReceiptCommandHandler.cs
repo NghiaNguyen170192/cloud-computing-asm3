@@ -8,7 +8,9 @@ namespace NetCore.Donation.Application.Receipt.Update;
 public class UpdateReceiptCommandHandler(
     IUnitOfWork unitOfWork,
     IReceiptRepository receiptRepository,
+    IContactRepository contactRepository,
     ITransactionRepository transactionRepository,
+    IPaymentMethodRepository paymentMethodRepository,
     IReceiptDocumentGenerator documentGenerator,
     IReceiptDocumentStorage documentStorage)
     : IRequestHandler<UpdateReceiptCommand, bool>
@@ -45,9 +47,13 @@ public class UpdateReceiptCommandHandler(
         {
             await ReceiptDocumentService.AssignGeneratedDocumentAsync(
                 receipt,
+                contactRepository,
+                transactionRepository,
+                paymentMethodRepository,
                 documentGenerator,
                 documentStorage,
                 cancellationToken);
+            receipt.MarkGenerated();
         }
 
         try

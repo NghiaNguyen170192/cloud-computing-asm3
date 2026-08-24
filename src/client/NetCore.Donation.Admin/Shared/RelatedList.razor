@@ -1,0 +1,45 @@
+<section class="related-list">
+    <div class="related-list-header">
+        <h2 class="h6 mb-0">@Title</h2>
+        <span class="text-muted small">@(Loading ? "…" : CountLabel)</span>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Error))
+    {
+        <div class="alert alert-danger py-2 mb-0">@Error</div>
+    }
+    else if (Loading)
+    {
+        <p class="text-muted mb-0">Loading…</p>
+    }
+    else if (Count == 0)
+    {
+        <p class="text-muted mb-0">@EmptyText</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 related-table">
+                <thead>@Header</thead>
+                <tbody>@ChildContent</tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+
+    [Parameter] public int Count { get; set; }
+
+    [Parameter] public bool Loading { get; set; }
+
+    [Parameter] public string? Error { get; set; }
+
+    [Parameter] public string EmptyText { get; set; } = "None.";
+
+    [Parameter] public RenderFragment? Header { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string CountLabel => Count == 1 ? "1 record" : $"{Count} records";
+}

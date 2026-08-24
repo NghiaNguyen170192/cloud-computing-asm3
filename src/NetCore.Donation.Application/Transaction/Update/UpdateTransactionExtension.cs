@@ -8,7 +8,11 @@ public static class UpdateTransactionExtension
     {
         transaction.UpdateReceiptDetails(
             request.Amount,
+            request.PaymentMethodId,
             request.PaymentType,
-            request.ReceivedDate);
+            request.BookDate,
+            request.ReceivedDate,
+            request.PaymentScheduleId,
+            request.Status);
     }
 }

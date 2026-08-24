@@ -1,0 +1,73 @@
+@inject DonationApiClient Api
+
+<LookupSearch TItem="PaymentScheduleDto"
+              Value="PaymentScheduleId"
+              ValueChanged="PaymentScheduleIdChanged"
+              SelectedChanged="SelectedChanged"
+              Label="@Label"
+              SecondaryLabel="@(SecondaryLabel ?? extra)"
+              Placeholder="Search schedule identifier"
+              EmptyText="No payment schedules match that identifier."
+              Disabled="Disabled || ContactId == Guid.Empty || PaymentMethodId == Guid.Empty"
+              DisabledText="@(ContactId == Guid.Empty ? "Search a contact first." : PaymentMethodId == Guid.Empty ? "Select a payment method first." : "")"
+              LinkPath="payment-schedules"
+              Search="SearchAsync"
+              Id="schedule => schedule.Id"
+              Title="schedule => RadzenODataQuery.IdentifierOrShort(schedule.Identifier, schedule.Id)"
+              Subtitle="schedule => schedule.PaymentMethodDisplayName" />
+
+@code {
+    [Parameter] public Guid ContactId { get; set; }
+
+    [Parameter] public Guid PaymentScheduleId { get; set; }
+
+    [Parameter] public EventCallback<Guid> PaymentScheduleIdChanged { get; set; }
+
+    [Parameter] public EventCallback<PaymentScheduleDto?> SelectedChanged { get; set; }
+
+    [Parameter] public string? Label { get; set; }
+
+    [Parameter] public string? SecondaryLabel { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    [Parameter] public Guid PaymentMethodId { get; set; }
+
+    private string? extra;
+    private Guid extraForId;
+
+    private Task<IReadOnlyList<PaymentScheduleDto>> SearchAsync(string term, CancellationToken token)
+    {
+        if (ContactId == Guid.Empty)
+        {
+            return Task.FromResult<IReadOnlyList<PaymentScheduleDto>>([]);
+        }
+
+        var request = AdminLookups.PaymentScheduleSearch(term);
+        if (PaymentMethodId != Guid.Empty)
+        {
+            request = new ODataListRequest
+            {
+                Select = request.Select,
+                Filter = $"({request.Filter}) and {AdminLookups.Eq("PaymentMethodId", PaymentMethodId)}",
+                OrderBy = request.OrderBy,
+                Top = request.Top,
+                Count = request.Count,
+            };
+        }
+
+        return LookupQuery.Values(Api.QueryPaymentSchedulesAsync(request, ContactId, token));
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        extra = await LookupExtras.ForAsync(
+            PaymentScheduleId,
+            SecondaryLabel,
+            extraForId,
+            extra,
+            id => Api.GetPaymentScheduleAsync(id),
+            schedule => schedule?.PaymentMethodDisplayName);
+        extraForId = PaymentScheduleId;
+    }
+}

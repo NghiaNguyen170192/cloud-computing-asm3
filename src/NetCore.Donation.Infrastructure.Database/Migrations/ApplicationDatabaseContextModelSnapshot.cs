@@ -141,64 +141,6 @@ namespace NetCore.Donation.Infrastructure.Database.Migrations
                     b.ToTable("Countries");
                 });
 
-            modelBuilder.Entity("NetCore.Donation.Domain.Entities.IdempotencyLog", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("CorrelationId")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("HttpMethod")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
-
-                    b.Property<bool>("IsExpired")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<string>("RequestPath")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<string>("RequestType")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("ResponseData")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("ResponseStatusCode")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CorrelationId", "RequestType")
-                        .IsUnique()
-                        .HasDatabaseName("IX_IdempotencyLog_CorrelationId_RequestType");
-
-                    b.HasIndex("ExpiresAt", "IsExpired")
-                        .HasDatabaseName("IX_IdempotencyLog_Expiry");
-
-                    b.ToTable("IdempotencyLogs", (string)null);
-                });
-
             modelBuilder.Entity("NetCore.Donation.Domain.Entities.Journal", b =>
                 {
                     b.Property<Guid>("Id")
@@ -280,11 +222,6 @@ namespace NetCore.Donation.Infrastructure.Database.Migrations
 
                     b.HasIndex("IdempotencyKey")
                         .HasDatabaseName("IX_OutboxMessages_IdempotencyKey");
-
-                    b.HasIndex("IdempotencyKey", "MessageType")
-                        .IsUnique()
-                        .HasDatabaseName("IX_OutboxMessages_IdempotencyKey_MessageType")
-                        .HasFilter("\"IdempotencyKey\" <> ''");
 
                     b.HasIndex("ProcessedAtUtc", "OccurredAtUtc")
                         .HasDatabaseName("IX_OutboxMessages_Pending");
@@ -534,7 +471,7 @@ namespace NetCore.Donation.Infrastructure.Database.Migrations
             modelBuilder.Entity("NetCore.Donation.Domain.Entities.Journal", b =>
                 {
                     b.HasOne("NetCore.Donation.Domain.Entities.Transaction", "Transaction")
-                        .WithMany()
+                        .WithMany("Journals")
                         .HasForeignKey("TransactionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -586,7 +523,7 @@ namespace NetCore.Donation.Infrastructure.Database.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("NetCore.Donation.Domain.Entities.Transaction", "Transaction")
-                        .WithMany()
+                        .WithMany("Receipts")
                         .HasForeignKey("TransactionId")
                         .OnDelete(DeleteBehavior.SetNull);
 
@@ -621,6 +558,13 @@ namespace NetCore.Donation.Infrastructure.Database.Migrations
                     b.Navigation("PaymentMethod");
 
                     b.Navigation("PaymentSchedule");
+                });
+
+            modelBuilder.Entity("NetCore.Donation.Domain.Entities.Transaction", b =>
+                {
+                    b.Navigation("Journals");
+
+                    b.Navigation("Receipts");
                 });
 #pragma warning restore 612, 618
         }

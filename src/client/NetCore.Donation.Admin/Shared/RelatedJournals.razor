@@ -1,0 +1,54 @@
+@inject DonationApiClient Api
+
+<RelatedList Title="Journals" Count="@count" Loading="@loading" Error="@error" EmptyText="No journals.">
+    <Header>
+        <tr>
+            <th>Journal</th>
+            <th>Created (UTC)</th>
+        </tr>
+    </Header>
+    <ChildContent>
+        @foreach (var journal in items)
+        {
+            <tr>
+                <td><EntityLink Path="journals" Id="journal.Id" Text="@RadzenODataQuery.IdentifierOrShort(journal.Identifier, journal.Id)" /></td>
+                <td>@journal.CreatedDate.ToString("u")</td>
+            </tr>
+        }
+    </ChildContent>
+</RelatedList>
+
+@code {
+    [Parameter] public Guid TransactionId { get; set; }
+
+    private bool loading = true;
+    private string? error;
+    private int count;
+    private IReadOnlyList<JournalDto> items = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        try
+        {
+            var result = await Api.QueryJournalsAsync(
+                AdminLookups.Related(
+                    "Id,Identifier,CreatedDate",
+                    AdminLookups.Eq("TransactionId", TransactionId),
+                    "CreatedDate desc"));
+            items = result.Value;
+            count = result.Count;
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+            items = [];
+            count = 0;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

@@ -1,0 +1,57 @@
+@inject DonationApiClient Api
+
+<LookupSearch TItem="CountryDto"
+              Value="CountryId"
+              ValueChanged="CountryIdChanged"
+              SelectedChanged="SelectedChanged"
+              Label="@Label"
+              SecondaryLabel="@(SecondaryLabel ?? extra)"
+              Placeholder="Search country name or code"
+              EmptyText="No countries match that name or code."
+              Disabled="Disabled"
+              Search="SearchAsync"
+              Id="country => country.Id"
+              Title="country => country.Name"
+              Subtitle="country => country.CodeLabel" />
+
+@code {
+    [Parameter] public Guid CountryId { get; set; }
+
+    [Parameter] public EventCallback<Guid> CountryIdChanged { get; set; }
+
+    [Parameter] public EventCallback<CountryDto?> SelectedChanged { get; set; }
+
+    [Parameter] public string? Label { get; set; }
+
+    [Parameter] public string? SecondaryLabel { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    private string? extra;
+    private Guid extraForId;
+
+    private Task<IReadOnlyList<CountryDto>> SearchAsync(string term, CancellationToken token) =>
+        LookupQuery.Values(Api.QueryCountriesAsync(AdminLookups.CountrySearch(term), token));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        extra = await LookupExtras.ForAsync(
+            CountryId,
+            SecondaryLabel,
+            extraForId,
+            extra,
+            async id =>
+            {
+                var result = await Api.QueryCountriesAsync(new ODataListRequest
+                {
+                    Select = "Id,Name,Alpha2,CountryCode",
+                    Filter = AdminLookups.Eq("Id", id),
+                    Top = 1,
+                    Count = false,
+                });
+                return result.Value.FirstOrDefault();
+            },
+            country => country?.CodeLabel);
+        extraForId = CountryId;
+    }
+}

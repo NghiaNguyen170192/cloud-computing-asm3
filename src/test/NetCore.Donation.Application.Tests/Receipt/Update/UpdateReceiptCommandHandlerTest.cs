@@ -19,7 +19,7 @@ public class UpdateReceiptCommandHandlerTest : BaseTest
     private readonly IReceiptRepository receiptRepository;
     private readonly ITransactionRepository transactionRepository;
     private readonly IUnitOfWork unitOfWork;
-    private readonly BlankReceiptDocumentGenerator documentGenerator = new();
+    private readonly ReceiptPdfDocumentGenerator documentGenerator = new();
     private readonly InMemoryReceiptDocumentStorage documentStorage = new();
 
     public UpdateReceiptCommandHandlerTest()
@@ -45,16 +45,16 @@ public class UpdateReceiptCommandHandlerTest : BaseTest
             receiptRepository,
             contactRepository,
             transactionRepository,
+            paymentMethodRepository,
             documentGenerator,
             documentStorage);
 
         var receiptId = await createHandler.Handle(new CreateReceiptCommand(contact.Id), default);
-        var objectKey = $"receipts/{receiptId:N}.pdf";
-        Assert.IsTrue(await documentStorage.ExistsAsync(objectKey));
-
         var beforeUpdate = await new GetReceiptQueryHandler(receiptRepository)
             .Handle(new GetReceiptQuery(receiptId), default);
         Assert.IsNotNull(beforeUpdate);
+        var objectKey = $"receipts/{beforeUpdate.Identifier}.pdf";
+        Assert.IsTrue(await documentStorage.ExistsAsync(objectKey));
         Assert.IsNull(beforeUpdate.TransactionId);
         Assert.IsTrue(beforeUpdate.HasDocument);
         var generatedAtBefore = beforeUpdate.DocumentGeneratedAtUtc;
@@ -62,7 +62,9 @@ public class UpdateReceiptCommandHandlerTest : BaseTest
         var updateHandler = new UpdateReceiptCommandHandler(
             unitOfWork,
             receiptRepository,
+            contactRepository,
             transactionRepository,
+            paymentMethodRepository,
             documentGenerator,
             documentStorage);
 
@@ -79,6 +81,7 @@ public class UpdateReceiptCommandHandlerTest : BaseTest
         Assert.AreEqual(transaction.Id, afterUpdate.TransactionId);
         Assert.IsTrue(afterUpdate.HasDocument);
         Assert.AreEqual("application/pdf", afterUpdate.DocumentContentType);
+        Assert.AreEqual($"{afterUpdate.Identifier}.pdf", afterUpdate.DocumentFileName);
         Assert.IsTrue(afterUpdate.DocumentGeneratedAtUtc >= generatedAtBefore);
     }
 

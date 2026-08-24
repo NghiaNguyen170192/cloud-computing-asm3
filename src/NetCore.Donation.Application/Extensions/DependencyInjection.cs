@@ -9,12 +9,10 @@ public static class DependencyInjection
 {
 	public static IServiceCollection AddApplication(this IServiceCollection services)
 	{
-		services.AddSingleton<IDonationTransactionOutcome, RandomDonationTransactionOutcome>();
+		services.AddSingleton<IDonationTransactionOutcome, SucceededDonationTransactionOutcome>();
 		services.AddMediatR(cfg =>
 		{
 			cfg.RegisterServicesFromAssembly(typeof(AssemblyReference).Assembly);
-			// Add idempotency behavior before logging to catch duplicates early
-			cfg.AddOpenBehavior(typeof(IdempotencyBehavior<,>));
 			cfg.AddOpenBehavior(typeof(LoggingBehavior<,>));
 		});
 

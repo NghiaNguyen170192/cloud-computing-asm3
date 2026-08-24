@@ -5,7 +5,8 @@
 
 <h1>Money flow</h1>
 <p class="text-muted">
-    Domain-event history from the outbox. Expand a row to see where the money went:
+    Posted gifts from the donation pipeline and from records created in admin.
+    Expand a row to see where the money went:
     donor → payment schedule (recurring) or transaction (one-time) → journal + receipt.
 </p>
 
@@ -15,16 +16,16 @@
 }
 
 <RadzenStack Gap="1rem" class="list-page">
-    <FilterToolbar @bind-Auto="@auto" Apply="@ApplyFilter" />
+    <FilterToolbar Apply="@ApplyFilter" />
 
-    <RadzenDataFilter @ref="dataFilter" Auto="@auto" TItem="DonationFlowDto" ViewChanged="@(_ => grid.Reload())">
+    <RadzenDataFilter @ref="dataFilter" Auto="false" TItem="DonationFlowDto" ViewChanged="@(_ => grid.Reload())">
         <Properties>
             <RadzenDataFilterProperty Property="@nameof(DonationFlowDto.Status)" Title="Status" />
             <RadzenDataFilterProperty Property="@nameof(DonationFlowDto.Amount)" Title="Amount" />
             <RadzenDataFilterProperty Property="@nameof(DonationFlowDto.MoneyPath)" Title="Money path" />
             <RadzenDataFilterProperty Property="@nameof(DonationFlowDto.PaymentScheduleIdentifier)" Title="Schedule" />
             <RadzenDataFilterProperty Property="@nameof(DonationFlowDto.TransactionIdentifier)" Title="Transaction" />
-            <RadzenDataFilterProperty Property="@nameof(DonationFlowDto.ContactEmail)" Title="Contact email" />
+            <RadzenDataFilterProperty Property="@nameof(DonationFlowDto.ContactFullName)" Title="Contact" />
         </Properties>
     </RadzenDataFilter>
 
@@ -54,9 +55,9 @@
             <RadzenDataGridColumn Property="@nameof(DonationFlowDto.Amount)" Title="Amount" FormatString="{0:C}" Width="120px" />
             <RadzenDataGridColumn Property="@nameof(DonationFlowDto.Status)" Title="Status" Width="110px" />
             <RadzenDataGridColumn Property="@nameof(DonationFlowDto.MoneyPath)" Title="Money path" />
-            <RadzenDataGridColumn Property="@nameof(DonationFlowDto.ContactEmail)" Title="Contact" Width="140px">
+            <RadzenDataGridColumn Property="@nameof(DonationFlowDto.ContactFullName)" Title="Contact" Width="180px">
                 <Template Context="flow">
-                    <EntityLink Path="contacts" Id="flow.ContactId" Text="@(string.IsNullOrWhiteSpace(flow.ContactEmail) ? null : flow.ContactEmail)" />
+                    <EntityLink Path="contacts" Id="flow.ContactId" Text="@flow.ContactFullName" />
                 </Template>
             </RadzenDataGridColumn>
             <RadzenDataGridColumn Property="@nameof(DonationFlowDto.PaymentScheduleIdentifier)" Title="Schedule" Width="170px">
@@ -84,7 +85,6 @@
 </RadzenStack>
 
 @code {
-    private bool auto = true;
     private bool loading;
     private string? error;
     private int count;

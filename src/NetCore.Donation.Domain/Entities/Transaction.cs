@@ -32,6 +32,10 @@ public class Transaction : Entity, IAggregateRoot
 
     public DateOnly ReceivedDate { get; private set; }
 
+    public ICollection<Journal> Journals { get; private set; } = new List<Journal>();
+
+    public ICollection<Receipt> Receipts { get; private set; } = new List<Receipt>();
+
     public static Transaction Create(
         decimal amount,
         Guid? paymentScheduleId,
@@ -43,7 +47,7 @@ public class Transaction : Entity, IAggregateRoot
     {
         Validate(amount, paymentScheduleId, contactId, paymentMethodId, paymentType, bookDate, receivedDate);
         var id = Guid.NewGuid();
-        return new Transaction
+        var transaction = new Transaction
         {
             Id = id,
             Identifier = RecordIdentifier.Transaction(bookDate, id),
@@ -52,10 +56,13 @@ public class Transaction : Entity, IAggregateRoot
             ContactId = contactId,
             PaymentMethodId = paymentMethodId,
             PaymentType = paymentType,
-            Status = TransactionStatus.Succeeded,
+            Status = TransactionStatus.Pending,
             BookDate = bookDate,
             ReceivedDate = receivedDate,
         };
+
+        transaction.RaiseCreated();
+        return transaction;
     }
 
     public static Transaction CreatePending(
@@ -83,14 +90,24 @@ public class Transaction : Entity, IAggregateRoot
             ReceivedDate = bookDate,
         };
 
-        transaction.AddDomainEvent(new TransactionPendingDomainEvent(
-            transaction.Id,
-            transaction.Identifier,
-            transaction.PaymentScheduleId,
-            transaction.ContactId,
-            transaction.Amount,
-            isRecurring));
+        transaction.RaiseCreated();
         return transaction;
+    }
+
+    public void TransitionToPending()
+    {
+        if (Status != TransactionStatus.Pending)
+        {
+            return;
+        }
+
+        AddDomainEvent(new TransactionPendingDomainEvent(
+            Id,
+            Identifier,
+            PaymentScheduleId,
+            ContactId,
+            Amount,
+            PaymentScheduleId is not null));
     }
 
     public void MarkSucceeded()
@@ -98,7 +115,7 @@ public class Transaction : Entity, IAggregateRoot
         EnsurePending();
         Status = TransactionStatus.Succeeded;
         ReceivedDate = DateOnly.FromDateTime(DateTime.UtcNow);
-        AddDomainEvent(new TransactionSucceededDomainEvent(Id, Identifier, ContactId, PaymentScheduleId, Amount));
+        RaiseCompleted();
     }
 
     public void MarkFailed()
@@ -108,12 +125,28 @@ public class Transaction : Entity, IAggregateRoot
         AddDomainEvent(new TransactionFailedDomainEvent(Id, Identifier, ContactId, Amount));
     }
 
-    public void UpdateReceiptDetails(decimal amount, PaymentType paymentType, DateOnly receivedDate)
+    public void UpdateReceiptDetails(
+        decimal amount,
+        Guid paymentMethodId,
+        PaymentType paymentType,
+        DateOnly bookDate,
+        DateOnly receivedDate,
+        Guid? paymentScheduleId,
+        TransactionStatus status)
     {
-        Validate(amount, PaymentScheduleId, ContactId, PaymentMethodId, paymentType, BookDate, receivedDate);
+        Validate(amount, paymentScheduleId, ContactId, paymentMethodId, paymentType, bookDate, receivedDate);
+        if (!Enum.IsDefined(status))
+        {
+            throw new ArgumentOutOfRangeException(nameof(status));
+        }
+
         Amount = amount;
+        PaymentMethodId = paymentMethodId;
         PaymentType = paymentType;
+        BookDate = bookDate;
         ReceivedDate = receivedDate;
+        PaymentScheduleId = paymentScheduleId;
+        Status = status;
     }
 
     private void EnsurePending()
@@ -132,6 +165,27 @@ public class Transaction : Entity, IAggregateRoot
         {
             Identifier = RecordIdentifier.Transaction(BookDate, Id);
         }
+    }
+
+    private void RaiseCreated()
+    {
+        AddDomainEvent(new TransactionCreatedDomainEvent(
+            Id,
+            Identifier,
+            ContactId,
+            PaymentScheduleId,
+            PaymentMethodId,
+            Amount));
+    }
+
+    private void RaiseCompleted()
+    {
+        AddDomainEvent(new TransactionCompletedDomainEvent(
+            Id,
+            Identifier,
+            ContactId,
+            PaymentScheduleId,
+            Amount));
     }
 
     private static void Validate(

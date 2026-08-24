@@ -19,6 +19,26 @@ public static class QueryTransactionDtoExtension
             Status = transaction.Status,
             BookDate = transaction.BookDate,
             ReceivedDate = transaction.ReceivedDate,
+            JournalId = transaction.Journals
+                .OrderByDescending(journal => journal.CreatedDate)
+                .ThenByDescending(journal => journal.Id)
+                .Select(journal => (Guid?)journal.Id)
+                .FirstOrDefault(),
+            JournalIdentifier = transaction.Journals
+                .OrderByDescending(journal => journal.CreatedDate)
+                .ThenByDescending(journal => journal.Id)
+                .Select(journal => journal.Identifier)
+                .FirstOrDefault(),
+            ReceiptId = transaction.Receipts
+                .OrderByDescending(receipt => receipt.CreatedDate)
+                .ThenByDescending(receipt => receipt.Id)
+                .Select(receipt => (Guid?)receipt.Id)
+                .FirstOrDefault(),
+            ReceiptIdentifier = transaction.Receipts
+                .OrderByDescending(receipt => receipt.CreatedDate)
+                .ThenByDescending(receipt => receipt.Id)
+                .Select(receipt => receipt.Identifier)
+                .FirstOrDefault(),
         });
     }
 }

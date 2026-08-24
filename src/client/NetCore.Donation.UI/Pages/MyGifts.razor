@@ -60,8 +60,8 @@
                         <td>
                             @if (gift.Receipt is { HasDocument: true })
                             {
-                                <button class="btn btn-sm btn-outline-success" type="button" @onclick="() => DownloadAsync(gift.Receipt.Id)">
-                                    PDF
+                                <button class="btn btn-sm btn-outline-success" type="button" @onclick="() => DownloadAsync(gift.Receipt)">
+                                    Receipt
                                 </button>
                             }
                             else
@@ -123,10 +123,13 @@ else if (searched)
         }
     }
 
-    private async Task DownloadAsync(Guid receiptId)
+    private async Task DownloadAsync(ReceiptDto receipt)
     {
-        var pdf = await Api.GetReceiptPdfAsync(receiptId);
-        await JS.InvokeVoidAsync("downloadFile", $"receipt-{receiptId:N}.pdf", "application/pdf", pdf);
+        var bytes = await Api.GetReceiptDocumentAsync(receipt.Id);
+        var fileName = string.IsNullOrWhiteSpace(receipt.DocumentFileName)
+            ? receipt.Identifier
+            : receipt.DocumentFileName;
+        await JS.InvokeVoidAsync("downloadFile", fileName, "application/pdf", bytes);
     }
 
     private sealed record GiftRow(TransactionDto Transaction, ReceiptDto? Receipt);

@@ -54,6 +54,19 @@ public sealed class CountryDto
 
     [JsonPropertyName("name")]
     public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("country-code")]
+    public string CountryCode { get; set; } = string.Empty;
+
+    [JsonPropertyName("alpha2")]
+    public string Alpha2 { get; set; } = string.Empty;
+
+    [JsonPropertyName("alpha3")]
+    public string Alpha3 { get; set; } = string.Empty;
+
+    public string CodeLabel => string.IsNullOrWhiteSpace(Alpha2)
+        ? CountryCode
+        : string.IsNullOrWhiteSpace(CountryCode) ? Alpha2 : $"{Alpha2} · {CountryCode}";
 }
 
 public sealed class ContactDto
@@ -206,6 +219,18 @@ public sealed class TransactionDto
 
     [JsonPropertyName("received-date")]
     public DateOnly ReceivedDate { get; set; }
+
+    [JsonPropertyName("journal-id")]
+    public Guid? JournalId { get; set; }
+
+    [JsonPropertyName("journal-identifier")]
+    public string? JournalIdentifier { get; set; }
+
+    [JsonPropertyName("receipt-id")]
+    public Guid? ReceiptId { get; set; }
+
+    [JsonPropertyName("receipt-identifier")]
+    public string? ReceiptIdentifier { get; set; }
 }
 
 public sealed class JournalDto
@@ -338,6 +363,9 @@ public sealed class DonationFlowDto
 
     [JsonPropertyName("contact-email")]
     public string? ContactEmail { get; set; }
+
+    [JsonPropertyName("contact-full-name")]
+    public string? ContactFullName { get; set; }
 
     [JsonPropertyName("payment-method-id")]
     public Guid? PaymentMethodId { get; set; }

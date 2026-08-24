@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using NetCore.Donation.Application.Outbox.QueryOutboxMessages;
 using NetCore.Donation.Domain.Entities;
 using NetCore.Donation.Infrastructure.Database;
+using NetCore.Donation.Infrastructure.Database.Repositories;
 
 namespace NetCore.Donation.Application.Tests.Outbox;
 
@@ -19,17 +20,17 @@ public class QueryOutboxMessagesHandlerTest : BaseTest
                 "NetCore.Donation.Domain.Events.CountryCreatedDomainEvent",
                 """{"countryId":"00000000-0000-0000-0000-000000000001","name":"A"}""",
                 correlationId,
-                "idem-a"));
+                correlationId));
             context.OutboxMessages.Add(OutboxMessage.Create(
                 "NetCore.Donation.Domain.Events.JournalEntryCreatedDomainEvent",
                 """{"contactId":"00000000-0000-0000-0000-000000000002","amount":10}""",
                 correlationId,
-                "idem-b"));
+                correlationId));
             context.OutboxMessages.Add(OutboxMessage.Create(
                 "NetCore.Donation.Domain.Events.CountryCreatedDomainEvent",
                 """{"countryId":"00000000-0000-0000-0000-000000000003","name":"B"}""",
                 "other-correlation",
-                "idem-c"));
+                "other-correlation"));
             await context.SaveChangesAsync(CancellationToken.None);
 
             var handler = new QueryOutboxMessagesHandler(new OutboxMessageRepository(context));
@@ -37,34 +38,6 @@ public class QueryOutboxMessagesHandlerTest : BaseTest
 
             Assert.HasCount(2, result);
             Assert.IsTrue(result.All(message => message.CorrelationId == correlationId));
-        }
-    }
-
-    [TestMethod]
-    public async Task Handle_WhenQueriedByIdempotencyKey_ReturnsMatchingMessage()
-    {
-        var context = await GetContext();
-        await using (context)
-        {
-            context.OutboxMessages.Add(OutboxMessage.Create(
-                "NetCore.Donation.Domain.Events.CountryCreatedDomainEvent",
-                """{"countryId":"00000000-0000-0000-0000-000000000001","name":"A"}""",
-                "corr-a",
-                "idem-lookup"));
-            context.OutboxMessages.Add(OutboxMessage.Create(
-                "NetCore.Donation.Domain.Events.JournalEntryCreatedDomainEvent",
-                """{"contactId":"00000000-0000-0000-0000-000000000002","amount":10}""",
-                "corr-b",
-                "idem-other"));
-            await context.SaveChangesAsync(CancellationToken.None);
-
-            var handler = new QueryOutboxMessagesHandler(new OutboxMessageRepository(context));
-            var result = (await handler.Handle(
-                new QueryOutboxMessages(IdempotencyKey: "idem-lookup"),
-                CancellationToken.None)).ToList();
-
-            Assert.HasCount(1, result);
-            Assert.AreEqual("idem-lookup", result[0].IdempotencyKey);
         }
     }
 }

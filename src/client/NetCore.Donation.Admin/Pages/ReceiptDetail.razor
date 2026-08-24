@@ -1,14 +1,16 @@
+@page "/receipts/new"
 @page "/receipts/{Id:guid}"
 @inject DonationApiClient Api
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
-<PageTitle>Receipt — Donation admin</PageTitle>
+<PageTitle>@(IsNew ? "New receipt" : "Receipt") — Donation admin</PageTitle>
 
-<div class="d-flex align-items-center gap-3 mb-3">
-    <h1 class="mb-0">Receipt</h1>
-    <RadzenButton Text="Back to list" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@(() => Nav.NavigateTo("receipts"))" />
-</div>
+<EntityFormBar Title="@(IsNew ? "New receipt" : "Receipt")"
+               Busy="@saving"
+               ShowSave="@IsNew"
+               Save="@SaveAsync"
+               Back="@(() => Nav.NavigateTo("receipts"))" />
 
 @if (!string.IsNullOrWhiteSpace(error))
 {
@@ -18,7 +20,7 @@ else if (loading)
 {
     <p>Loading…</p>
 }
-else if (item is null)
+else if (!IsNew && missing)
 {
     <p class="text-muted">Receipt not found.</p>
 }
@@ -26,30 +28,35 @@ else
 {
     <div class="detail-card">
         <DetailGrid>
-            <DetailField Label="Identifier">@RadzenODataQuery.IdentifierOrShort(item.Identifier, item.Id)</DetailField>
-            <DetailField Label="Contact">
-                <EntityLink Path="contacts" Id="item.ContactId" Text="@item.ContactFullName" />
+            @if (!IsNew)
+            {
+                <DetailField Label="Identifier" Locked>@form.Identifier</DetailField>
+            }
+            <DetailField Label="Contact" Locked="@(!IsNew)">
+                <ContactLookup @bind-ContactId="form.ContactId" @bind-ContactId:after="OnContactChanged" Label="@form.ContactName" Disabled="@(!IsNew)" />
             </DetailField>
-            <DetailField Label="Transaction">
-                <EntityLink Path="transactions" Id="item.TransactionId" Text="@RadzenODataQuery.IdentifierOrShort(item.TransactionIdentifier, item.TransactionId)" />
+            <DetailField Label="Transaction" Locked="@(!IsNew)">
+                <TransactionLookup @key="form.ContactId"
+                                   ContactId="form.ContactId"
+                                   @bind-TransactionId="form.TransactionId"
+                                   Label="@form.TransactionName"
+                                   Disabled="@(!IsNew)" />
             </DetailField>
-            <DetailField Label="Payment schedule">
-                <EntityLink Path="payment-schedules" Id="item.PaymentScheduleId" Text="@RadzenODataQuery.IdentifierOrShort(item.PaymentScheduleIdentifier, item.PaymentScheduleId)" />
-            </DetailField>
-            <DetailField Label="Document">
-                @if (item.HasDocument)
-                {
-                    <RadzenButton Text="Download PDF" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@DownloadAsync" />
-                    <span class="text-muted ms-2">@item.DocumentFileName</span>
-                }
-                else
-                {
-                    <span class="text-muted">None</span>
-                }
-            </DetailField>
-            <DetailField Label="Content type">@(item.DocumentContentType ?? "—")</DetailField>
-            <DetailField Label="Size">@(item.DocumentSizeBytes is { } size ? $"{size} bytes" : "—")</DetailField>
-            <DetailField Label="Generated (UTC)">@(item.DocumentGeneratedAtUtc?.ToString("u") ?? "—")</DetailField>
+            @if (!IsNew)
+            {
+                <DetailField Label="Payment schedule" Locked>
+                    <EntityLink Path="payment-schedules" Id="form.PaymentScheduleId" Text="@form.PaymentScheduleName" />
+                </DetailField>
+                <DetailField Label="Content type" Locked>@form.DocumentContentType</DetailField>
+                <DetailField Label="Generated (UTC)" Locked>@form.DocumentGeneratedAtUtc</DetailField>
+                <DetailField Label="Document" Plain>
+                    @if (form.HasDocument)
+                    {
+                        <button type="button" class="receipt-download" @onclick="DownloadAsync">Download</button>
+                        <span class="receipt-file-name">@form.DocumentFileName</span>
+                    }
+                </DetailField>
+            }
         </DetailGrid>
     </div>
 }
@@ -57,22 +64,43 @@ else
 @code {
     [Parameter] public Guid Id { get; set; }
 
-    private bool loading = true;
+    private bool IsNew => Id == Guid.Empty;
+
+    private bool loading;
+    private bool saving;
+    private bool missing;
     private string? error;
-    private ReceiptDto? item;
+    private ReceiptForm form = new();
 
     protected override async Task OnParametersSetAsync()
     {
+        if (IsNew)
+        {
+            form = new ReceiptForm();
+            loading = false;
+            missing = false;
+            error = null;
+            return;
+        }
+
         loading = true;
         try
         {
-            item = await Api.GetReceiptAsync(Id);
+            var item = await Api.GetReceiptAsync(Id);
+            if (item is null)
+            {
+                missing = true;
+                return;
+            }
+
+            form = ReceiptForm.From(item);
+            missing = false;
             error = null;
         }
         catch (Exception exception)
         {
             error = exception.Message;
-            item = null;
+            missing = true;
         }
         finally
         {
@@ -80,25 +108,93 @@ else
         }
     }
 
-    private async Task DownloadAsync()
+    private void OnContactChanged()
     {
-        if (item is null)
+        if (IsNew)
         {
-            return;
+            form.TransactionId = Guid.Empty;
+            form.TransactionName = null;
         }
+    }
 
+    private async Task SaveAsync()
+    {
+        saving = true;
         try
         {
-            var pdf = await Api.GetReceiptPdfAsync(item.Id);
-            var fileName = string.IsNullOrWhiteSpace(item.DocumentFileName)
-                ? $"receipt-{item.Id:N}.pdf"
-                : item.DocumentFileName;
-            await JS.InvokeVoidAsync("downloadFile", fileName, "application/pdf", pdf);
+            var transactionId = form.TransactionId == Guid.Empty ? (Guid?)null : form.TransactionId;
+            if (IsNew)
+            {
+                if (form.ContactId == Guid.Empty)
+                {
+                    error = "Search for and select a contact.";
+                    return;
+                }
+
+                var id = await Api.CreateReceiptAsync(form.ContactId, transactionId);
+                Nav.NavigateTo($"receipts/{id}");
+                return;
+            }
+
+            await Api.UpdateReceiptAsync(Id, transactionId);
             error = null;
         }
         catch (Exception exception)
         {
             error = exception.Message;
         }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task DownloadAsync()
+    {
+        try
+        {
+            var bytes = await Api.GetReceiptDocumentAsync(Id);
+            var fileName = string.IsNullOrWhiteSpace(form.DocumentFileName)
+                ? form.Identifier
+                : form.DocumentFileName;
+            await JS.InvokeVoidAsync("downloadFile", fileName, "application/pdf", bytes);
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+        }
+    }
+
+    private sealed class ReceiptForm
+    {
+        public string Identifier { get; set; } = string.Empty;
+        public Guid ContactId { get; set; }
+        public string? ContactName { get; set; }
+        public Guid TransactionId { get; set; }
+        public string? TransactionName { get; set; }
+        public Guid? PaymentScheduleId { get; set; }
+        public string? PaymentScheduleName { get; set; }
+        public bool HasDocument { get; set; }
+        public string? DocumentFileName { get; set; }
+        public string? DocumentContentType { get; set; }
+        public long? DocumentSizeBytes { get; set; }
+        public string? DocumentGeneratedAtUtc { get; set; }
+
+        public static ReceiptForm From(ReceiptDto item) => new()
+        {
+            Identifier = RadzenODataQuery.IdentifierOrShort(item.Identifier, item.Id),
+            ContactId = item.ContactId,
+            ContactName = item.ContactFullName,
+            TransactionId = item.TransactionId ?? Guid.Empty,
+            TransactionName = RadzenODataQuery.IdentifierOrShort(item.TransactionIdentifier, item.TransactionId),
+            PaymentScheduleId = item.PaymentScheduleId,
+            PaymentScheduleName = RadzenODataQuery.IdentifierOrShort(item.PaymentScheduleIdentifier, item.PaymentScheduleId),
+            HasDocument = item.HasDocument,
+            DocumentFileName = item.DocumentFileName,
+            DocumentContentType = item.DocumentContentType,
+            DocumentSizeBytes = item.DocumentSizeBytes,
+            DocumentGeneratedAtUtc = item.DocumentGeneratedAtUtc?.ToString("u"),
+        };
     }
 }

@@ -1,0 +1,72 @@
+@inject DonationApiClient Api
+
+<RelatedList Title="Payment schedules" Count="@count" Loading="@loading" Error="@error" EmptyText="No payment schedules.">
+    <Header>
+        <tr>
+            <th>Schedule</th>
+            <th>Book date</th>
+            <th>Amount</th>
+            <th>Interval</th>
+            <th>Type</th>
+            @if (PaymentMethodId is null)
+            {
+                <th>Method</th>
+            }
+        </tr>
+    </Header>
+    <ChildContent>
+        @foreach (var schedule in items)
+        {
+            <tr>
+                <td><EntityLink Path="payment-schedules" Id="schedule.Id" Text="@RadzenODataQuery.IdentifierOrShort(schedule.Identifier, schedule.Id)" /></td>
+                <td>@schedule.BookDate</td>
+                <td>@schedule.Amount.ToString("C")</td>
+                <td>@schedule.RecurringInterval</td>
+                <td>@schedule.PaymentType</td>
+                @if (PaymentMethodId is null)
+                {
+                    <td><EntityLink Path="payment-methods" Id="schedule.PaymentMethodId" Text="@schedule.PaymentMethodDisplayName" /></td>
+                }
+            </tr>
+        }
+    </ChildContent>
+</RelatedList>
+
+@code {
+    [Parameter] public Guid? ContactId { get; set; }
+
+    [Parameter] public Guid? PaymentMethodId { get; set; }
+
+    private bool loading = true;
+    private string? error;
+    private int count;
+    private IReadOnlyList<PaymentScheduleDto> items = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        try
+        {
+            var filter = PaymentMethodId is { } methodId ? AdminLookups.Eq("PaymentMethodId", methodId) : null;
+            var result = await Api.QueryPaymentSchedulesAsync(
+                AdminLookups.Related(
+                    "Id,Identifier,Amount,BookDate,PaymentType,RecurringInterval,PaymentMethodId,PaymentMethodDisplayName",
+                    filter,
+                    "BookDate desc"),
+                ContactId);
+            items = result.Value;
+            count = result.Count;
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+            items = [];
+            count = 0;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

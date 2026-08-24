@@ -1,8 +1,4 @@
-@if (Id is not { } id || id == Guid.Empty)
-{
-    <span class="text-muted">—</span>
-}
-else
+@if (Id is { } id && id != Guid.Empty)
 {
     <a class="entity-link" href="@($"{Path.Trim('/')}/{id}")">@Display</a>
 }

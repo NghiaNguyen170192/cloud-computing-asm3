@@ -1,0 +1,77 @@
+@inject DonationApiClient Api
+
+<RelatedList Title="Receipts" Count="@count" Loading="@loading" Error="@error" EmptyText="No receipts.">
+    <Header>
+        <tr>
+            <th>Receipt</th>
+            @if (TransactionId is null)
+            {
+                <th>Transaction</th>
+            }
+            <th>Document</th>
+        </tr>
+    </Header>
+    <ChildContent>
+        @foreach (var receipt in items)
+        {
+            <tr>
+                <td><EntityLink Path="receipts" Id="receipt.Id" Text="@RadzenODataQuery.IdentifierOrShort(receipt.Identifier, receipt.Id)" /></td>
+                @if (TransactionId is null)
+                {
+                    <td><EntityLink Path="transactions" Id="receipt.TransactionId" Text="@RadzenODataQuery.IdentifierOrShort(receipt.TransactionIdentifier, receipt.TransactionId)" /></td>
+                }
+                <td>@(receipt.HasDocument ? "Yes" : "None")</td>
+            </tr>
+        }
+    </ChildContent>
+</RelatedList>
+
+@code {
+    [Parameter] public Guid? ContactId { get; set; }
+
+    [Parameter] public Guid? TransactionId { get; set; }
+
+    [Parameter] public Guid? PaymentScheduleId { get; set; }
+
+    private bool loading = true;
+    private string? error;
+    private int count;
+    private IReadOnlyList<ReceiptDto> items = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        try
+        {
+            string? filter = null;
+            if (TransactionId is { } transactionId)
+            {
+                filter = AdminLookups.Eq("TransactionId", transactionId);
+            }
+            else if (PaymentScheduleId is { } scheduleId)
+            {
+                filter = AdminLookups.Eq("PaymentScheduleId", scheduleId);
+            }
+
+            var result = await Api.QueryReceiptsAsync(
+                AdminLookups.Related(
+                    "Id,Identifier,TransactionId,TransactionIdentifier,HasDocument",
+                    filter,
+                    "Identifier desc"),
+                ContactId);
+            items = result.Value;
+            count = result.Count;
+            error = null;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+            items = [];
+            count = 0;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

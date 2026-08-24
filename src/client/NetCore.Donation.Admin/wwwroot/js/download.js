@@ -1,5 +1,6 @@
 window.downloadFile = (fileName, contentType, bytes) => {
-    const blob = new Blob([bytes], { type: contentType });
+    const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    const blob = new Blob([payload], { type: contentType || "application/pdf" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;

@@ -1,13 +1,15 @@
+@page "/journals/new"
 @page "/journals/{Id:guid}"
 @inject DonationApiClient Api
 @inject NavigationManager Nav
 
-<PageTitle>Journal — Donation admin</PageTitle>
+<PageTitle>@(IsNew ? "New journal" : "Journal") — Donation admin</PageTitle>
 
-<div class="d-flex align-items-center gap-3 mb-3">
-    <h1 class="mb-0">Journal</h1>
-    <RadzenButton Text="Back to list" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@(() => Nav.NavigateTo("journals"))" />
-</div>
+<EntityFormBar Title="@(IsNew ? "New journal" : "Journal")"
+               Busy="@saving"
+               ShowSave="@IsNew"
+               Save="@SaveAsync"
+               Back="@(() => Nav.NavigateTo("journals"))" />
 
 @if (!string.IsNullOrWhiteSpace(error))
 {
@@ -17,7 +19,7 @@ else if (loading)
 {
     <p>Loading…</p>
 }
-else if (item is null)
+else if (!IsNew && missing)
 {
     <p class="text-muted">Journal not found.</p>
 }
@@ -25,11 +27,18 @@ else
 {
     <div class="detail-card">
         <DetailGrid>
-            <DetailField Label="Identifier">@RadzenODataQuery.IdentifierOrShort(item.Identifier, item.Id)</DetailField>
-            <DetailField Label="Created (UTC)">@item.CreatedDate.ToString("u")</DetailField>
-            <DetailField Label="Modified (UTC)">@item.ModifiedDate.ToString("u")</DetailField>
-            <DetailField Label="Transaction">
-                <EntityLink Path="transactions" Id="item.TransactionId" Text="@RadzenODataQuery.IdentifierOrShort(item.TransactionIdentifier, item.TransactionId)" />
+            @if (!IsNew)
+            {
+                <DetailField Label="Identifier" Locked>@form.Identifier</DetailField>
+                <DetailField Label="Created (UTC)" Locked>@form.CreatedUtc</DetailField>
+                <DetailField Label="Modified (UTC)" Locked>@form.ModifiedUtc</DetailField>
+            }
+            <DetailField Label="Transaction" Locked="@(!IsNew)">
+                <TransactionLookup ContactId="Guid.Empty"
+                                   RequireContact="false"
+                                   @bind-TransactionId="form.TransactionId"
+                                   Label="@form.TransactionName"
+                                   Disabled="@(!IsNew)" />
             </DetailField>
         </DetailGrid>
     </div>
@@ -38,26 +47,89 @@ else
 @code {
     [Parameter] public Guid Id { get; set; }
 
-    private bool loading = true;
+    private bool IsNew => Id == Guid.Empty;
+
+    private bool loading;
+    private bool saving;
+    private bool missing;
     private string? error;
-    private JournalDto? item;
+    private JournalForm form = new();
 
     protected override async Task OnParametersSetAsync()
     {
+        if (IsNew)
+        {
+            form = new JournalForm();
+            loading = false;
+            missing = false;
+            error = null;
+            return;
+        }
+
         loading = true;
         try
         {
-            item = await Api.GetJournalAsync(Id);
+            var item = await Api.GetJournalAsync(Id);
+            if (item is null)
+            {
+                missing = true;
+                return;
+            }
+
+            form = JournalForm.From(item);
+            missing = false;
             error = null;
         }
         catch (Exception exception)
         {
             error = exception.Message;
-            item = null;
+            missing = true;
         }
         finally
         {
             loading = false;
         }
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        try
+        {
+            if (form.TransactionId == Guid.Empty)
+            {
+                error = "Search for and select a transaction.";
+                return;
+            }
+
+            var id = await Api.CreateJournalAsync(form.TransactionId);
+            Nav.NavigateTo($"journals/{id}");
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private sealed class JournalForm
+    {
+        public string Identifier { get; set; } = string.Empty;
+        public string CreatedUtc { get; set; } = string.Empty;
+        public string ModifiedUtc { get; set; } = string.Empty;
+        public Guid TransactionId { get; set; }
+        public string? TransactionName { get; set; }
+
+        public static JournalForm From(JournalDto item) => new()
+        {
+            Identifier = RadzenODataQuery.IdentifierOrShort(item.Identifier, item.Id),
+            CreatedUtc = item.CreatedDate.ToString("u"),
+            ModifiedUtc = item.ModifiedDate.ToString("u"),
+            TransactionId = item.TransactionId,
+            TransactionName = RadzenODataQuery.IdentifierOrShort(item.TransactionIdentifier, item.TransactionId),
+        };
     }
 }

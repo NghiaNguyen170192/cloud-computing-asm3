@@ -19,7 +19,6 @@ public class OutboxMessageRepository(ApplicationDatabaseContext applicationDatab
 
     public async Task<IReadOnlyList<OutboxMessage>> FindByTraceAsync(
         string? correlationId,
-        string? idempotencyKey,
         CancellationToken cancellationToken)
     {
         var query = applicationDatabaseContext.OutboxMessages.AsNoTracking().AsQueryable();
@@ -27,11 +26,6 @@ public class OutboxMessageRepository(ApplicationDatabaseContext applicationDatab
         if (!string.IsNullOrWhiteSpace(correlationId))
         {
             query = query.Where(message => message.CorrelationId == correlationId);
-        }
-
-        if (!string.IsNullOrWhiteSpace(idempotencyKey))
-        {
-            query = query.Where(message => message.IdempotencyKey == idempotencyKey);
         }
 
         return await query

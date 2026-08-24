@@ -12,7 +12,6 @@ public class OutboxCaptureTests
     public async Task SaveChangesAsync_CapturesDomainEventAsOutboxMessageWithCorrelationId()
     {
         var correlationId = "correlation-trace-1";
-        var idempotencyKey = "idempotency-trace-1";
         var options = new DbContextOptionsBuilder<ApplicationDatabaseContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
@@ -20,8 +19,7 @@ public class OutboxCaptureTests
         await using var context = new ApplicationDatabaseContext(
             options,
             publisher: null,
-            new TestCorrelationIdAccessor(correlationId),
-            new TestIdempotencyKeyAccessor(idempotencyKey));
+            new TestCorrelationIdAccessor(correlationId));
         await context.Database.EnsureCreatedAsync();
 
         context.Countries.Add(Country.Create("Australia", "036", "AU", "AUS"));
@@ -30,7 +28,7 @@ public class OutboxCaptureTests
         var messages = await context.OutboxMessages.ToListAsync();
         Assert.HasCount(1, messages);
         Assert.AreEqual(correlationId, messages[0].CorrelationId);
-        Assert.AreEqual(idempotencyKey, messages[0].IdempotencyKey);
+        Assert.AreEqual(correlationId, messages[0].IdempotencyKey);
         Assert.IsNull(messages[0].ProcessedAtUtc);
         StringAssert.Contains(messages[0].MessageType, nameof(CountryCreatedDomainEvent));
     }
@@ -63,7 +61,7 @@ public class OutboxCaptureTests
     }
 
     [TestMethod]
-    public async Task SaveChangesAsync_SameIdempotencyKeyAndMessageType_DoesNotEnqueueSecondPendingMessage()
+    public async Task SaveChangesAsync_TwoEventsOfSameType_EnqueuesBothMessages()
     {
         var options = new DbContextOptionsBuilder<ApplicationDatabaseContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
@@ -72,8 +70,7 @@ public class OutboxCaptureTests
         await using var context = new ApplicationDatabaseContext(
             options,
             publisher: null,
-            new TestCorrelationIdAccessor("correlation-shared"),
-            new TestIdempotencyKeyAccessor("idempotency-shared"));
+            new TestCorrelationIdAccessor("correlation-shared"));
         await context.Database.EnsureCreatedAsync();
 
         context.Countries.Add(Country.Create("Australia", "036", "AU", "AUS"));
@@ -84,41 +81,13 @@ public class OutboxCaptureTests
             .Where(message => message.ProcessedAtUtc == null)
             .ToListAsync();
 
-        Assert.HasCount(1, pending);
+        Assert.HasCount(2, pending);
         Assert.AreEqual(2, await context.Countries.CountAsync());
-    }
-
-    [TestMethod]
-    public async Task SaveChangesAsync_WhenIdempotencyKeyMissing_CopiesCorrelationId()
-    {
-        var correlationId = "correlation-only";
-        var options = new DbContextOptionsBuilder<ApplicationDatabaseContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options;
-
-        await using var context = new ApplicationDatabaseContext(
-            options,
-            publisher: null,
-            new TestCorrelationIdAccessor(correlationId),
-            new TestIdempotencyKeyAccessor(null));
-        await context.Database.EnsureCreatedAsync();
-
-        context.Countries.Add(Country.Create("Australia", "036", "AU", "AUS"));
-        await context.SaveChangesAsync(CancellationToken.None);
-
-        var message = await context.OutboxMessages.SingleAsync();
-        Assert.AreEqual(correlationId, message.CorrelationId);
-        Assert.AreEqual(correlationId, message.IdempotencyKey);
     }
 
     private sealed class TestCorrelationIdAccessor(string correlationId) : ICorrelationIdAccessor
     {
         public string CorrelationId { get; } = correlationId;
-    }
-
-    private sealed class TestIdempotencyKeyAccessor(string? idempotencyKey) : IIdempotencyKeyAccessor
-    {
-        public string? IdempotencyKey { get; } = idempotencyKey;
     }
 
     private sealed class ThrowOnSaveInterceptor : SaveChangesInterceptor

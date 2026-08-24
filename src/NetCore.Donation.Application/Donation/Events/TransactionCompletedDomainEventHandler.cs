@@ -7,15 +7,15 @@ using NetCore.Donation.Domain.Events;
 
 namespace NetCore.Donation.Application.Donation.Events;
 
-public class TransactionSucceededDomainEventHandler(
+public class TransactionCompletedDomainEventHandler(
     IServiceScopeFactory scopeFactory,
-    ILogger<TransactionSucceededDomainEventHandler> logger)
-    : INotificationHandler<TransactionSucceededDomainEvent>
+    ILogger<TransactionCompletedDomainEventHandler> logger)
+    : INotificationHandler<TransactionCompletedDomainEvent>
 {
-    public async Task Handle(TransactionSucceededDomainEvent notification, CancellationToken cancellationToken)
+    public async Task Handle(TransactionCompletedDomainEvent notification, CancellationToken cancellationToken)
     {
         logger.LogInformation(
-            "Transaction {TransactionId} succeeded; dispatching receipt and journal commands",
+            "Transaction {TransactionId} completed; dispatching receipt and journal commands",
             notification.TransactionId);
 
         await Task.WhenAll(

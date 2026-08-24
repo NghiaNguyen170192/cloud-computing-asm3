@@ -46,7 +46,7 @@
     @if (receiptId != Guid.Empty)
     {
         <button class="btn btn-give" type="button" disabled="@busy" @onclick="DownloadReceiptAsync">
-            @(busy ? "Preparing PDF…" : "Download receipt PDF")
+            @(busy ? "Preparing receipt…" : "Download receipt")
         </button>
     }
     <a class="btn btn-outline-secondary @(receiptId != Guid.Empty ? "ms-2" : null)" href="gifts">View my gifts</a>
@@ -132,8 +132,10 @@
         busy = true;
         try
         {
-            var pdf = await Api.GetReceiptPdfAsync(receiptId);
-            await JS.InvokeVoidAsync("downloadFile", $"receipt-{receiptId:N}.pdf", "application/pdf", pdf);
+            var receipt = await Api.GetReceiptAsync(receiptId);
+            var bytes = await Api.GetReceiptDocumentAsync(receiptId);
+            var fileName = receipt?.DocumentFileName ?? receipt?.Identifier ?? receiptId.ToString("N");
+            await JS.InvokeVoidAsync("downloadFile", fileName, "application/pdf", bytes);
         }
         catch (Exception exception)
         {

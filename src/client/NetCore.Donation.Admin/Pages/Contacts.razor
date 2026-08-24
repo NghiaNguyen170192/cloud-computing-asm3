@@ -1,5 +1,6 @@
 @page "/contacts"
 @inject DonationApiClient Api
+@inject NavigationManager Nav
 
 <PageTitle>Contacts — Donation admin</PageTitle>
 
@@ -12,9 +13,9 @@
 }
 
 <RadzenStack Gap="1rem" class="list-page">
-    <FilterToolbar @bind-Auto="@auto" Apply="@ApplyFilter" />
+    <FilterToolbar Apply="@ApplyFilter" Add="@(() => Nav.NavigateTo("contacts/new"))" AddText="Add contact" />
 
-    <RadzenDataFilter @ref="dataFilter" Auto="@auto" TItem="ContactDto" ViewChanged="@(_ => grid.Reload())">
+    <RadzenDataFilter @ref="dataFilter" Auto="false" TItem="ContactDto" ViewChanged="@(_ => grid.Reload())">
         <Properties>
             <RadzenDataFilterProperty Property="@nameof(ContactDto.FullName)" Title="Full name" />
             <RadzenDataFilterProperty Property="@nameof(ContactDto.FirstName)" Title="First name" />
@@ -54,7 +55,6 @@
 
 @code {
     private const string Select = "Id,FullName,FirstName,LastName,Email,PhoneNumber,Gender,CountryName,IsActive,DoNotEmail,DoNotSms";
-    private bool auto = true;
     private bool loading;
     private string? error;
     private int count;

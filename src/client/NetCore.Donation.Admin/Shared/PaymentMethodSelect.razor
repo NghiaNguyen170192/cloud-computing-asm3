@@ -1,0 +1,60 @@
+@inject DonationApiClient Api
+
+<select class="form-select"
+        value="@PaymentMethodId"
+        disabled="@(Disabled || ContactId == Guid.Empty)"
+        @onchange="OnChanged">
+    <option value="@Guid.Empty">@(ContactId == Guid.Empty ? "Search a contact first" : "Select a method")</option>
+    @foreach (var method in methods)
+    {
+        <option value="@method.Id">@method.DisplayName</option>
+    }
+</select>
+
+@code {
+    [Parameter] public Guid ContactId { get; set; }
+
+    [Parameter] public Guid PaymentMethodId { get; set; }
+
+    [Parameter] public EventCallback<Guid> PaymentMethodIdChanged { get; set; }
+
+    [Parameter] public EventCallback<PaymentMethodDto?> SelectedChanged { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    private IReadOnlyList<PaymentMethodDto> methods = [];
+    private Guid loadedForContact;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ContactId == loadedForContact)
+        {
+            return;
+        }
+
+        loadedForContact = ContactId;
+        if (ContactId == Guid.Empty)
+        {
+            methods = [];
+            return;
+        }
+
+        try
+        {
+            methods = (await Api.QueryPaymentMethodsAsync(AdminLookups.PaymentMethods, ContactId)).Value;
+        }
+        catch
+        {
+            methods = [];
+        }
+    }
+
+    private async Task OnChanged(ChangeEventArgs args)
+    {
+        var id = Guid.TryParse(args.Value?.ToString(), out var parsed) ? parsed : Guid.Empty;
+        var method = methods.FirstOrDefault(item => item.Id == id);
+        PaymentMethodId = id;
+        await PaymentMethodIdChanged.InvokeAsync(id);
+        await SelectedChanged.InvokeAsync(method);
+    }
+}

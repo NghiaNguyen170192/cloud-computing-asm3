@@ -1,5 +1,6 @@
 @page "/journals"
 @inject DonationApiClient Api
+@inject NavigationManager Nav
 
 <PageTitle>Journals — Donation admin</PageTitle>
 
@@ -12,9 +13,9 @@
 }
 
 <RadzenStack Gap="1rem" class="list-page">
-    <FilterToolbar @bind-Auto="@auto" Apply="@ApplyFilter" />
+    <FilterToolbar Apply="@ApplyFilter" Add="@(() => Nav.NavigateTo("journals/new"))" AddText="Add journal" />
 
-    <RadzenDataFilter @ref="dataFilter" Auto="@auto" TItem="JournalDto" ViewChanged="@(_ => grid.Reload())">
+    <RadzenDataFilter @ref="dataFilter" Auto="false" TItem="JournalDto" ViewChanged="@(_ => grid.Reload())">
         <Properties>
             <RadzenDataFilterProperty Property="@nameof(JournalDto.Identifier)" Title="Identifier" />
             <RadzenDataFilterProperty Property="@nameof(JournalDto.CreatedDate)" Title="Created (UTC)" />
@@ -43,7 +44,6 @@
 
 @code {
     private const string Select = "Id,Identifier,TransactionId,TransactionIdentifier,CreatedDate";
-    private bool auto = true;
     private bool loading;
     private string? error;
     private int count;

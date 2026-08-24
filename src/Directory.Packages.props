@@ -92,6 +92,10 @@
     <PackageVersion Include="Scrutor" Version="7.0.0" />
   </ItemGroup>
 
+  <ItemGroup Label="Documents">
+    <PackageVersion Include="QuestPDF" Version="2026.7.3" />
+  </ItemGroup>
+
   <ItemGroup Label="AWS">
     <PackageVersion Include="AWSSDK.S3" Version="3.7.416.12" />
     <PackageVersion Include="Amazon.Lambda.AspNetCoreServer.Hosting" Version="1.9.0" />

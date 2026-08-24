@@ -10,6 +10,7 @@ public class CreateReceiptCommandHandler(
     IReceiptRepository receiptRepository,
     IContactRepository contactRepository,
     ITransactionRepository transactionRepository,
+    IPaymentMethodRepository paymentMethodRepository,
     IReceiptDocumentGenerator documentGenerator,
     IReceiptDocumentStorage documentStorage)
     : IRequestHandler<CreateReceiptCommand, Guid>
@@ -41,14 +42,17 @@ public class CreateReceiptCommandHandler(
         var receipt = request.ToDbEntity(paymentScheduleId);
         await ReceiptDocumentService.AssignGeneratedDocumentAsync(
             receipt,
+            contactRepository,
+            transactionRepository,
+            paymentMethodRepository,
             documentGenerator,
             documentStorage,
             cancellationToken);
-
-        await receiptRepository.AddAsync(receipt, cancellationToken);
+        receipt.MarkGenerated();
 
         try
         {
+            await receiptRepository.AddAsync(receipt, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
         catch

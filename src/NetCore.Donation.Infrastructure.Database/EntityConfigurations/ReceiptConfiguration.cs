@@ -28,7 +28,7 @@ public class ReceiptConfiguration : EntityTypeConfiguration<Receipt>
 
         builder
             .HasOne(receipt => receipt.Transaction)
-            .WithMany()
+            .WithMany(transaction => transaction.Receipts)
             .HasForeignKey(receipt => receipt.TransactionId)
             .OnDelete(DeleteBehavior.SetNull);
 

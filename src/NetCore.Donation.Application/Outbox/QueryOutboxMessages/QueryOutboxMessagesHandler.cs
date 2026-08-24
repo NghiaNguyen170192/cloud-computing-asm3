@@ -17,11 +17,6 @@ public class QueryOutboxMessagesHandler(IOutboxMessageRepository outboxMessageRe
             query = query.Where(message => message.CorrelationId == request.CorrelationId);
         }
 
-        if (!string.IsNullOrWhiteSpace(request.IdempotencyKey))
-        {
-            query = query.Where(message => message.IdempotencyKey == request.IdempotencyKey);
-        }
-
         return Task.FromResult(query);
     }
 }

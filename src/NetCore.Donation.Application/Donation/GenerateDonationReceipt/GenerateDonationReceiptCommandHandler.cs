@@ -10,7 +10,9 @@ namespace NetCore.Donation.Application.Donation.GenerateDonationReceipt;
 public class GenerateDonationReceiptCommandHandler(
     IUnitOfWork unitOfWork,
     IReceiptRepository receiptRepository,
+    IContactRepository contactRepository,
     ITransactionRepository transactionRepository,
+    IPaymentMethodRepository paymentMethodRepository,
     IReceiptDocumentGenerator documentGenerator,
     IReceiptDocumentStorage documentStorage)
     : IRequestHandler<GenerateDonationReceiptCommand, Guid>
@@ -44,6 +46,9 @@ public class GenerateDonationReceiptCommandHandler(
         {
             await ReceiptDocumentService.AssignGeneratedDocumentAsync(
                 receipt,
+                contactRepository,
+                transactionRepository,
+                paymentMethodRepository,
                 documentGenerator,
                 documentStorage,
                 cancellationToken);
