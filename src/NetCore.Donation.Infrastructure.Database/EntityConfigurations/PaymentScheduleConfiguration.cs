@@ -16,6 +16,9 @@ public class PaymentScheduleConfiguration : EntityTypeConfiguration<PaymentSched
         builder.HasIndex(schedule => schedule.Identifier).IsUnique();
         builder.HasIndex(schedule => schedule.ContactId);
         builder.HasIndex(schedule => schedule.PaymentMethodId);
+        builder.HasIndex(schedule => schedule.BookDate);
+        builder.HasIndex(schedule => schedule.PaymentType);
+        builder.HasIndex(schedule => schedule.RecurringInterval);
 
         builder
             .HasOne(schedule => schedule.Contact)

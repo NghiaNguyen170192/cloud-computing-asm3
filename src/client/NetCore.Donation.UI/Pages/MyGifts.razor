@@ -96,8 +96,14 @@ else if (searched)
         searched = true;
         try
         {
-            contact = (await Api.GetContactsAsync())
-                .FirstOrDefault(item => item.Email.Equals(email.Trim(), StringComparison.OrdinalIgnoreCase));
+            var normalizedEmail = email.Trim().ToLowerInvariant().Replace("'", "''", StringComparison.Ordinal);
+            var contacts = await Api.QueryContactsAsync(new ODataListRequest
+            {
+                Filter = $"tolower(Email) eq '{normalizedEmail}'",
+                Top = 1,
+                Count = false,
+            });
+            contact = contacts.Value.FirstOrDefault();
             if (contact is null)
             {
                 transactions = [];

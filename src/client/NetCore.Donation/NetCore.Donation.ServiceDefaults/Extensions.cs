@@ -76,10 +76,11 @@ public static class Extensions
             // Docker/Production: Use shared config from embedded resources or volume mount
             serviceDefaultsPath = Path.Combine("/app", "shared-config");
 
-            // If shared-config doesn't exist, try embedded resources
+            // Beanstalk/Lambda do not mount /app/shared-config. Skip embedded JSON streams:
+            // WebApplication's ConfigurationManager reloads and disposes those streams, which
+            // crashes the process. Appsettings + environment variables are the source of truth.
             if (!Directory.Exists(serviceDefaultsPath))
             {
-                LoadEmbeddedConfiguration(configurationBuilder, environment.EnvironmentName);
                 return;
             }
         }
@@ -127,25 +128,30 @@ public static class Extensions
         var assembly = typeof(Extensions).Assembly;
         var resourcePrefix = "NetCore.Donation.ServiceDefaults.";
 
-        // Load base appsettings.json
-        var baseConfigResource = $"{resourcePrefix}appsettings.json";
-        using (var stream = assembly.GetManifestResourceStream(baseConfigResource))
+        AddEmbeddedJsonStream(configurationBuilder, assembly, $"{resourcePrefix}appsettings.json", 0);
+        if (!string.IsNullOrWhiteSpace(environmentName))
         {
-            if (stream != null)
-            {
-                configurationBuilder.AddJsonStream(stream);
-            }
+            AddEmbeddedJsonStream(configurationBuilder, assembly, $"{resourcePrefix}appsettings.{environmentName}.json", 1);
+        }
+    }
+
+    private static void AddEmbeddedJsonStream(IConfigurationBuilder configurationBuilder, System.Reflection.Assembly assembly, string resourceName, int index)
+    {
+        using var stream = assembly.GetManifestResourceStream(resourceName);
+        if (stream == null)
+        {
+            return;
         }
 
-        // Load environment-specific appsettings
-        var envConfigResource = $"{resourcePrefix}appsettings.{environmentName}.json";
-        using (var stream = assembly.GetManifestResourceStream(envConfigResource))
+        // AddJsonStream reads at Build(); copy so the manifest stream can be disposed.
+        // Insert at the front so appsettings, environment variables, and CLI still win.
+        var copy = new MemoryStream();
+        stream.CopyTo(copy);
+        copy.Position = 0;
+        configurationBuilder.Sources.Insert(index, new Microsoft.Extensions.Configuration.Json.JsonStreamConfigurationSource
         {
-            if (stream != null)
-            {
-                configurationBuilder.AddJsonStream(stream);
-            }
-        }
+            Stream = copy,
+        });
     }
 
     public static IHostApplicationBuilder ConfigureOpenTelemetry(this IHostApplicationBuilder builder)

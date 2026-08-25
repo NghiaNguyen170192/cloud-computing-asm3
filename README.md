@@ -120,12 +120,7 @@ cd .\src\NetCore.Donation.Infrastructure.Database\
 dotnet ef migrations add migration_name --context ApplicationDatabaseContext -o .\Migrations\
 ```
 
-**Add Identity Server Store migration**
-```bash
-cd .\src\NetCore.Donation.Infrastructure.AuthenticationDatabase\
-
-dotnet ef migrations add migration_name --context ApplicationDbContext -o .\Migrations\ApplicationDb
-```
+The application database currently has a single squashed `Initial` migration. IdentityServer projects were removed; there is no separate identity database.
 
 <br />
 
@@ -135,9 +130,12 @@ dotnet ef migrations add migration_name --context ApplicationDbContext -o .\Migr
 - **NetCore.Donation.Application**: Application services, CQRS commands/queries
 - **NetCore.Donation.Infrastructure.Database**: EF Core, repositories, database context
 - **NetCore.Donation.Api**: REST API endpoints
-- **NetCore.Donation.UI**: Blazor WebAssembly frontend
+- **NetCore.Donation.UI**: Hope and Help donor Blazor frontend
+- **NetCore.Donation.Admin**: Staff Blazor frontend
 - **NetCore.Donation.AppHost**: .NET Aspire orchestration for local development
 - **NetCore.Donation.Migration**: Database seeding and migration tool
+
+Solution architecture (AWS Academy): [`SOLUTION_ARCHITECTURE.md`](SOLUTION_ARCHITECTURE.md). Data-flow charts: [`DATA_FLOW.md`](DATA_FLOW.md). AWS scripts: [`infra/README.md`](infra/README.md).
 
 <br />
 

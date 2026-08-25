@@ -15,8 +15,11 @@ public class TransactionConfiguration : EntityTypeConfiguration<Transaction>
         builder.Property(transaction => transaction.Identifier).IsRequired().HasMaxLength(RecordIdentifier.MaxLength);
         builder.HasIndex(transaction => transaction.Identifier).IsUnique();
         builder.HasIndex(transaction => transaction.PaymentScheduleId);
-        builder.HasIndex(transaction => transaction.ContactId);
+        builder.HasIndex(transaction => new { transaction.ContactId, transaction.BookDate });
         builder.HasIndex(transaction => transaction.PaymentMethodId);
+        builder.HasIndex(transaction => transaction.BookDate);
+        builder.HasIndex(transaction => transaction.Status);
+        builder.HasIndex(transaction => transaction.PaymentType);
 
         builder
             .HasOne(transaction => transaction.PaymentSchedule)

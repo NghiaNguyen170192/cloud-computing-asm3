@@ -232,10 +232,12 @@ public class DonationCommandPipelineTest : BaseTest
         for (var attempt = 0; attempt < 10; attempt++)
         {
             var processed = await mediator.Send(new ProcessOutboxMessagesCommand());
-            if (processed == 0)
+            if (processed > 0)
             {
-                return;
+                continue;
             }
+
+            return;
         }
 
         Assert.Fail("Outbox pipeline did not drain within the expected number of processor cycles.");

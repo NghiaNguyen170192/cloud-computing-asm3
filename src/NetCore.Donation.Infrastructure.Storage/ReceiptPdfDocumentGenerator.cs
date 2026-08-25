@@ -9,16 +9,15 @@ public sealed class ReceiptPdfDocumentGenerator : IReceiptDocumentGenerator
 {
     public const string ContentType = "application/pdf";
 
-    static ReceiptPdfDocumentGenerator()
-    {
-        QuestPDF.Settings.License = LicenseType.Community;
-    }
+    private static readonly object LicenseGate = new();
+    private static bool licenseInitialized;
 
     public Task<ReceiptDocumentContent> GenerateAsync(
         string fileName,
         string body,
         CancellationToken cancellationToken = default)
     {
+        EnsureCommunityLicense();
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
         ArgumentException.ThrowIfNullOrWhiteSpace(body);
@@ -69,4 +68,34 @@ public sealed class ReceiptPdfDocumentGenerator : IReceiptDocumentGenerator
             pdfFileName,
             bytes.LongLength));
     }
+
+    private static void EnsureCommunityLicense()
+    {
+        if (licenseInitialized)
+        {
+            return;
+        }
+
+        lock (LicenseGate)
+        {
+            if (licenseInitialized)
+            {
+                return;
+            }
+
+            try
+            {
+                QuestPDF.Settings.License = LicenseType.Community;
+                licenseInitialized = true;
+            }
+            catch (Exception exception)
+            {
+                throw new InvalidOperationException(
+                    "QuestPDF failed to initialize. Native QuestPdfSkia assets must be present next to the running app. " +
+                    exception.GetBaseException().Message,
+                    exception);
+            }
+        }
+    }
 }
+

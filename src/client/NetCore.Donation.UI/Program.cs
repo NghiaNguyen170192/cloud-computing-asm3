@@ -45,6 +45,7 @@ builder.Services.AddHttpClient<DonationApiClient>(client =>
 
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
+builder.AddBlazorUiCompression();
 
 var app = builder.Build();
 
@@ -58,7 +59,7 @@ else
     app.UseHttpsRedirection();
 }
 
-app.UseStaticFiles();
+app.UseBlazorUiStaticFiles();
 app.UseRouting();
 
 app.MapBlazorHub();

@@ -1,0 +1,8 @@
+{
+    "ApiId":  "5e22ya16dc",
+    "StageName":  "$default",
+    "AccessLogSettings":  {
+                              "DestinationArn":  "arn:aws:logs:us-east-1:026652000073:log-group:/aws/apigateway/aws-asm3-http-api",
+                              "Format":  "{\"requestId\":\"$context.requestId\",\"method\":\"$context.httpMethod\",\"path\":\"$context.path\",\"status\":\"$context.status\",\"integrationError\":\"$context.integrationErrorMessage\"}"
+                          }
+}

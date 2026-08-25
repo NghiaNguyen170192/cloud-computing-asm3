@@ -46,7 +46,7 @@ public class ProcessOutboxMessagesCommandHandler(
             }
             catch (Exception exception)
             {
-                message.RecordFailure(exception.Message);
+                message.RecordFailure(FormatFailure(exception));
             }
         }
 
@@ -73,5 +73,10 @@ public class ProcessOutboxMessagesCommandHandler(
         }
 
         return notification;
+    }
+
+    private static string FormatFailure(Exception exception)
+    {
+        return exception.ToString();
     }
 }

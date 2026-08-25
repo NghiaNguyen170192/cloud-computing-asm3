@@ -11,6 +11,8 @@ public class PaymentMethodConfiguration : EntityTypeConfiguration<PaymentMethod>
         builder.Property(method => method.DisplayName).IsRequired().HasMaxLength(200);
         builder.Property(method => method.PaymentType).HasConversion<string>().HasMaxLength(20);
         builder.HasIndex(method => method.ContactId);
+        builder.HasIndex(method => method.DisplayName);
+        builder.HasIndex(method => method.PaymentType);
 
         builder
             .HasOne(method => method.Contact)

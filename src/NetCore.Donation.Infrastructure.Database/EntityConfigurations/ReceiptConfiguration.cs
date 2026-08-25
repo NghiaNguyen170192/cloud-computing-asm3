@@ -12,7 +12,7 @@ public class ReceiptConfiguration : EntityTypeConfiguration<Receipt>
         builder.Property(receipt => receipt.Identifier).IsRequired().HasMaxLength(RecordIdentifier.MaxLength);
         builder.HasIndex(receipt => receipt.Identifier).IsUnique();
         builder.HasIndex(receipt => receipt.ContactId);
-        builder.HasIndex(receipt => receipt.TransactionId);
+        builder.HasIndex(receipt => new { receipt.TransactionId, receipt.CreatedDate });
         builder.HasIndex(receipt => receipt.PaymentScheduleId);
         builder.HasIndex(receipt => receipt.DocumentObjectKey);
 

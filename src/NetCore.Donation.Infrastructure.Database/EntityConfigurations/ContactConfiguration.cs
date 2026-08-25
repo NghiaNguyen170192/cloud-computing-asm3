@@ -17,6 +17,10 @@ public class ContactConfiguration : EntityTypeConfiguration<Contact>
         builder.Property(contact => contact.DoNotEmail).IsRequired().HasDefaultValue(false);
         builder.Property(contact => contact.DoNotSms).IsRequired().HasDefaultValue(false);
         builder.HasIndex(contact => contact.Email);
+        builder.HasIndex(contact => contact.FirstName);
+        builder.HasIndex(contact => contact.LastName);
+        builder.HasIndex(contact => contact.PhoneNumber);
+        builder.HasIndex(contact => contact.Gender);
         builder.HasIndex(contact => contact.CountryId);
 
         builder

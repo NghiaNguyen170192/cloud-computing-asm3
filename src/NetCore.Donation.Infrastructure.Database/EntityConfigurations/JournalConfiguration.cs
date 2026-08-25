@@ -11,7 +11,8 @@ public class JournalConfiguration : EntityTypeConfiguration<Journal>
     {
         builder.Property(journal => journal.Identifier).IsRequired().HasMaxLength(RecordIdentifier.MaxLength);
         builder.HasIndex(journal => journal.Identifier).IsUnique();
-        builder.HasIndex(journal => journal.TransactionId);
+        builder.HasIndex(journal => new { journal.TransactionId, journal.CreatedDate });
+        builder.HasIndex(journal => journal.CreatedDate);
 
         builder
             .HasOne(journal => journal.Transaction)

@@ -6,8 +6,6 @@ public class DatabaseOptions
 
     public string ApplicationConnectionString { get; set; } = string.Empty;
 
-    public string IdpConnectionString { get; set; } = string.Empty;
-
     public string Provider { get; set; } = string.Empty;
 
     public string MigrationsAssembly { get; set; } = string.Empty;

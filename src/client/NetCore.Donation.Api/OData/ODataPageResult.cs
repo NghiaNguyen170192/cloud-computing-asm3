@@ -26,7 +26,7 @@ public static class ODataPageResult
         var settings = new ODataQuerySettings
         {
             EnsureStableOrdering = true,
-            HandleNullPropagation = HandleNullPropagationOption.True,
+            HandleNullPropagation = HandleNullPropagationOption.Default,
         };
 
         var filtered = options.Filter is null

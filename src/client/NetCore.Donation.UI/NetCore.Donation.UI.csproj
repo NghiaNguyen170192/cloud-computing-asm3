@@ -23,6 +23,7 @@
 	<ItemGroup>
 		<Content Update="Properties\launchSettings.json" CopyToPublishDirectory="Never" />
 		<None Include="Procfile" CopyToPublishDirectory="PreserveNewest" />
+		<None Include="..\..\..\infra\eb-platform\**\*" CopyToPublishDirectory="PreserveNewest" Link=".platform\%(RecursiveDir)%(Filename)%(Extension)" />
 	</ItemGroup>
 
 </Project>

@@ -21,7 +21,9 @@ public sealed class DonationSeed(
     ILogger<DonationSeed> logger) : IDataSeed
 {
     private const int DefaultRecordCount = 1000;
+    private const int OutboxFlushContacts = 25;
     private const int Seed = 20260817;
+    private readonly List<BackdateJob> pendingBackdates = [];
 
     public IEnumerable<Type> Dependencies => [typeof(CountrySeed)];
 
@@ -128,7 +130,6 @@ public sealed class DonationSeed(
                         $"{faker.PickRandom(brands)} {faker.Random.Replace("****")}",
                         scheduleType));
                     context.ChangeTracker.Clear();
-                    await DrainOutboxAsync();
                 }
 
                 await CreateScheduleDonationAsync(
@@ -141,16 +142,35 @@ public sealed class DonationSeed(
                     stampPaymentMethod: useNewMethod);
             }
 
-            if ((index + 1) % 10 == 0)
+            if ((index + 1) % OutboxFlushContacts == 0)
             {
+                await FlushOutboxAndBackdatesAsync();
                 logger.LogInformation("Seeded {Inserted}/{Total} contacts.", index + 1, remaining);
             }
         }
 
-        await DrainOutboxAsync();
+        await FlushOutboxAndBackdatesAsync();
         logger.LogInformation(
             "Finished donation seed for {Count} contacts, including extra gifts and outbox money-flow events.",
             remaining);
+    }
+
+    private async Task FlushOutboxAndBackdatesAsync()
+    {
+        await DrainOutboxAsync();
+        foreach (var job in pendingBackdates)
+        {
+            await BackdateGiftAsync(
+                job.Result,
+                job.OccurredAtUtc,
+                job.ReceivedDate,
+                job.BatchStartedUtc,
+                job.StampContact,
+                job.StampPaymentMethod);
+            context.ChangeTracker.Clear();
+        }
+
+        pendingBackdates.Clear();
     }
 
     private async Task<UserMakesDonationResult> GiveThroughApplicationAsync(
@@ -185,15 +205,13 @@ public sealed class DonationSeed(
             DateOnly.FromDateTime(occurredAtUtc)));
 
         context.ChangeTracker.Clear();
-        await DrainOutboxAsync();
-        await BackdateGiftAsync(
+        pendingBackdates.Add(new BackdateJob(
             result,
             occurredAtUtc,
             ReceivedDate(faker, occurredAtUtc),
             batchStarted,
             stampContact,
-            stampPaymentMethod);
-        context.ChangeTracker.Clear();
+            stampPaymentMethod));
         return result;
     }
 
@@ -216,15 +234,13 @@ public sealed class DonationSeed(
             paymentType));
 
         context.ChangeTracker.Clear();
-        await DrainOutboxAsync();
-        await BackdateGiftAsync(
+        pendingBackdates.Add(new BackdateJob(
             new UserMakesDonationResult(contactId, paymentMethodId, scheduleId, null, true),
             occurredAtUtc,
             ReceivedDate(faker, occurredAtUtc),
             batchStarted,
-            stampContact: false,
-            stampPaymentMethod);
-        context.ChangeTracker.Clear();
+            StampContact: false,
+            stampPaymentMethod));
     }
 
     private async Task<PaymentType> PaymentTypeOfAsync(Guid paymentMethodId) =>
@@ -316,10 +332,15 @@ public sealed class DonationSeed(
             var stamp = occurredAtUtc.AddSeconds(offset);
             var messageId = ordered[offset].Id;
             await context.OutboxMessages
-                .Where(message => message.Id == messageId)
+                .Where(message => message.Id == messageId && message.ProcessedAtUtc != null)
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(message => message.OccurredAtUtc, stamp)
                     .SetProperty(message => message.ProcessedAtUtc, stamp));
+
+            await context.OutboxMessages
+                .Where(message => message.Id == messageId && message.ProcessedAtUtc == null)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(message => message.OccurredAtUtc, stamp));
         }
     }
 
@@ -329,10 +350,21 @@ public sealed class DonationSeed(
         {
             var processed = await dispatcher.Send(new ProcessOutboxMessagesCommand(100));
             context.ChangeTracker.Clear();
-            if (processed == 0)
+            if (processed > 0)
+            {
+                continue;
+            }
+
+            var pendingFailures = await context.OutboxMessages
+                .AnyAsync(message => message.ProcessedAtUtc == null);
+            if (!pendingFailures)
             {
                 return;
             }
+
+            logger.LogWarning(
+                "Outbox drain stopped because a batch made no progress; failed money-flow events were left unprocessed.");
+            return;
         }
 
         logger.LogWarning("Stopped draining the outbox after the attempt cap; some money-flow events may still be pending.");
@@ -387,6 +419,14 @@ public sealed class DonationSeed(
         Schedules,
         Mixed,
     }
+
+    private sealed record BackdateJob(
+        UserMakesDonationResult Result,
+        DateTime OccurredAtUtc,
+        DateOnly ReceivedDate,
+        DateTime BatchStartedUtc,
+        bool StampContact,
+        bool StampPaymentMethod);
 
     private sealed record DonorProfile(
         string FirstName,

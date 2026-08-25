@@ -7,6 +7,7 @@ $Prefix = "aws-asm3"
 $Tags = "Key=Project,Value=aws-asm3 Key=Assignment,Value=COSC29800-A3"
 $VpcId = "vpc-0cd83a2dc1b09d1e4"
 $Subnets = @("subnet-0e43067a277531b6d", "subnet-0ebbc28d107f9091a", "subnet-0cd0784673be06ac1")
+$subnetCsv = [string]::Join(",", $Subnets)
 $LabRoleArn = "arn:aws:iam::${Account}:role/LabRole"
 $LabInstanceProfile = "LabInstanceProfile"
 
@@ -93,6 +94,7 @@ if ($LASTEXITCODE -ne 0 -or -not $dbState -or $dbState -eq "None") {
     --vpc-security-group-ids $RdsSg `
     --db-subnet-group-name $subnetGroup `
     --publicly-accessible `
+    --enable-cloudwatch-logs-exports postgresql `
     --backup-retention-period 1 `
     --no-deletion-protection `
     --tags "Key=Project,Value=aws-asm3" "Key=Name,Value=$dbId" "Key=Assignment,Value=COSC29800-A3" `
@@ -100,6 +102,10 @@ if ($LASTEXITCODE -ne 0 -or -not $dbState -or $dbState -eq "None") {
 } else {
   Write-Host "RDS already exists ($dbState)"
 }
+
+aws rds create-db-parameter-group --db-parameter-group-name "$Prefix-postgres16" --db-parameter-group-family postgres16 --description "aws-asm3 postgres CloudWatch logging" --tags "Key=Project,Value=aws-asm3" "Key=Name,Value=$Prefix-postgres16" --region $Region 2>$null | Out-Null
+aws rds modify-db-parameter-group --db-parameter-group-name "$Prefix-postgres16" --parameters "ParameterName=log_connections,ParameterValue=1,ApplyMethod=immediate" "ParameterName=log_disconnections,ParameterValue=1,ApplyMethod=immediate" --region $Region 2>$null | Out-Null
+aws rds modify-db-instance --db-instance-identifier $dbId --db-parameter-group-name "$Prefix-postgres16" --cloudwatch-logs-export-configuration EnableLogTypes=postgresql --apply-immediately --region $Region 2>$null | Out-Null
 
 aws ssm put-parameter --name "/cosc29800/asm3/rds/master-password" --type String --value $dbPass --overwrite --region $Region 2>$null | Out-Null
 if ($LASTEXITCODE -eq 0) {
@@ -193,6 +199,21 @@ aws lambda add-permission `
 
 $HttpApiUrl = "https://${apiId}.execute-api.${Region}.amazonaws.com"
 
+$apiLogGroup = "/aws/apigateway/$Prefix-http-api"
+aws logs create-log-group --log-group-name $apiLogGroup --region $Region 2>$null | Out-Null
+aws logs put-retention-policy --log-group-name $apiLogGroup --retention-in-days 7 --region $Region 2>$null | Out-Null
+$apiLogJson = Join-Path (Split-Path $PSCommandPath) "apigw-access-logs.json"
+$accessLog = [ordered]@{
+  ApiId = $apiId
+  StageName = '$default'
+  AccessLogSettings = [ordered]@{
+    DestinationArn = "arn:aws:logs:${Region}:${Account}:log-group:$apiLogGroup"
+    Format = '{"requestId":"$context.requestId","method":"$context.httpMethod","path":"$context.path","status":"$context.status","integrationError":"$context.integrationErrorMessage"}'
+  }
+}
+$accessLog | ConvertTo-Json -Depth 5 | Set-Content $apiLogJson -Encoding utf8
+aws apigatewayv2 update-stage --cli-input-json "file://$apiLogJson" --region $Region 2>$null | Out-Null
+
 # --- Elastic Beanstalk (separate donor + admin) ---
 $donorApp = "$Prefix-donor-ui"
 $donorEnv = "$Prefix-donor-env"
@@ -225,29 +246,36 @@ foreach ($pair in @(
     --source-bundle "S3Bucket=$DeployBucket,S3Key=$sampleKey" `
     --region $Region 2>$null | Out-Null
 
-  $envs = aws elasticbeanstalk describe-environments --application-name $pair.App --environment-names $pair.Env --query "Environments[0].Status" --output text --region $Region 2>$null
+  $envs = aws elasticbeanstalk describe-environments --application-name $pair.App --environment-names $pair.Env --query Environments[0].Status --output text --region $Region 2>$null
   if (-not $envs -or $envs -eq "None" -or $envs -eq "Terminated") {
     Write-Host "Creating EB environment $($pair.Env) (5-10 min)..."
+    $optFile = Join-Path $env:TEMP "aws-asm3-eb-$($pair.Env).json"
+    @(
+      @{ Namespace = "aws:autoscaling:launchconfiguration"; OptionName = "IamInstanceProfile"; Value = $LabInstanceProfile }
+      @{ Namespace = "aws:autoscaling:launchconfiguration"; OptionName = "InstanceType"; Value = "t3.small" }
+      @{ Namespace = "aws:autoscaling:launchconfiguration"; OptionName = "SecurityGroups"; Value = $EbSg }
+      @{ Namespace = "aws:elasticbeanstalk:environment"; OptionName = "EnvironmentType"; Value = "SingleInstance" }
+      @{ Namespace = "aws:elasticbeanstalk:environment"; OptionName = "ServiceRole"; Value = "LabRole" }
+      @{ Namespace = "aws:ec2:vpc"; OptionName = "VPCId"; Value = $VpcId }
+      @{ Namespace = "aws:ec2:vpc"; OptionName = "Subnets"; Value = $subnetCsv }
+      @{ Namespace = "aws:elasticbeanstalk:application:environment"; OptionName = "ASPNETCORE_ENVIRONMENT"; Value = "Production" }
+      @{ Namespace = "aws:elasticbeanstalk:application:environment"; OptionName = "ASPNETCORE_URLS"; Value = "http://127.0.0.1:5000" }
+      @{ Namespace = "aws:elasticbeanstalk:application:environment"; OptionName = "PROJECT"; Value = "aws-asm3" }
+      @{ Namespace = "aws:elasticbeanstalk:application:environment"; OptionName = "ObjectStorage__BucketName"; Value = $ReceiptsBucket }
+      @{ Namespace = "aws:elasticbeanstalk:application:environment"; OptionName = "DonationApi__BaseUrl"; Value = $HttpApiUrl }
+      @{ Namespace = "aws:elasticbeanstalk:application:environment"; OptionName = "ApiBaseAddress"; Value = $HttpApiUrl }
+      @{ Namespace = "aws:elasticbeanstalk:cloudwatch:logs"; OptionName = "StreamLogs"; Value = "true" }
+      @{ Namespace = "aws:elasticbeanstalk:cloudwatch:logs"; OptionName = "RetentionInDays"; Value = "7" }
+      @{ Namespace = "aws:elasticbeanstalk:cloudwatch:logs:health"; OptionName = "HealthStreamingEnabled"; Value = "true" }
+      @{ Namespace = "aws:elasticbeanstalk:cloudwatch:logs:health"; OptionName = "RetentionInDays"; Value = "7" }
+    ) | ConvertTo-Json | ForEach-Object { [System.IO.File]::WriteAllText($optFile, $_, (New-Object System.Text.UTF8Encoding $false)) }
     aws elasticbeanstalk create-environment `
       --application-name $pair.App `
       --environment-name $pair.Env `
       --solution-stack-name "64bit Amazon Linux 2023 v3.11.6 running .NET 10" `
       --version-label "bootstrap-1" `
-      --option-settings `
-        "Namespace=aws:autoscaling:launchconfiguration,OptionName=IamInstanceProfile,Value=$LabInstanceProfile" `
-        "Namespace=aws:autoscaling:launchconfiguration,OptionName=InstanceType,Value=t3.small" `
-        "Namespace=aws:autoscaling:launchconfiguration,OptionName=SecurityGroups,Value=$EbSg" `
-        "Namespace=aws:elasticbeanstalk:environment,OptionName=EnvironmentType,Value=SingleInstance" `
-        "Namespace=aws:elasticbeanstalk:environment,OptionName=ServiceRole,Value=LabRole" `
-        "Namespace=aws:ec2:vpc,OptionName=VPCId,Value=$VpcId" `
-        "Namespace=aws:ec2:vpc,OptionName=Subnets,Value=$([string]::Join(',', $Subnets))" `
-        "Namespace=aws:elasticbeanstalk:application:environment,OptionName=ASPNETCORE_ENVIRONMENT,Value=Production" `
-        "Namespace=aws:elasticbeanstalk:application:environment,OptionName=ASPNETCORE_URLS,Value=http://127.0.0.1:5000" `
-        "Namespace=aws:elasticbeanstalk:application:environment,OptionName=PROJECT,Value=aws-asm3" `
-        "Namespace=aws:elasticbeanstalk:application:environment,OptionName=ObjectStorage__BucketName,Value=$ReceiptsBucket" `
-        "Namespace=aws:elasticbeanstalk:application:environment,OptionName=DonationApi__BaseUrl,Value=$HttpApiUrl" `
-        "Namespace=aws:elasticbeanstalk:application:environment,OptionName=ApiBaseAddress,Value=$HttpApiUrl" `
-      --tags "Key=Project,Value=aws-asm3" "Key=Name,Value=$($pair.Env)" "Key=Assignment,Value=COSC29800-A3" `
+      --option-settings "file://$optFile" `
+      --tags "Key=Project,Value=aws-asm3" "Key=Assignment,Value=COSC29800-A3" `
       --region $Region | Out-Null
   } else {
     Write-Host "EB env $($pair.Env) status: $envs"
@@ -292,6 +320,13 @@ $out = [ordered]@{
   glueDatabase      = $glueDb
   athenaWorkGroup   = "$Prefix-analytics"
   dbPasswordFile    = $dbPassPath
+  cloudWatch = @{
+    apiLambda     = "/aws/lambda/$Prefix-api"
+    apiGateway    = "/aws/apigateway/$Prefix-http-api"
+    donorUi       = "/aws/elasticbeanstalk/$donorEnv/var/log/web.stdout.log"
+    adminUi       = "/aws/elasticbeanstalk/$adminEnv/var/log/web.stdout.log"
+    postgres      = "/aws/rds/instance/$dbId/postgresql"
+  }
 }
 $outPath = Join-Path (Split-Path $PSCommandPath) "aws-asm3-outputs.json"
 $out | ConvertTo-Json | Set-Content $outPath -Encoding utf8
@@ -305,4 +340,4 @@ Write-Host "RDS endpoint: $endpoint"
 $out.rdsEndpoint = $endpoint
 $out | ConvertTo-Json | Set-Content $outPath -Encoding utf8
 Write-Host "Wrote $outPath"
-aws resource-groups list-group-resources --group-name "$Prefix-donation" --region $Region --output table
+aws resource-groups list-group-resources --group-name "donation-asm3-rg" --region $Region --output table

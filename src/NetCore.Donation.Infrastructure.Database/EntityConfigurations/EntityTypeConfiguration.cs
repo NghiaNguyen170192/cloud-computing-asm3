@@ -9,9 +9,5 @@ public class EntityTypeConfiguration<T> : IEntityTypeConfiguration<T> where T : 
 	public virtual void Configure(EntityTypeBuilder<T> builder)
 	{
 		builder.HasKey(entity => entity.Id);
-		builder.HasIndex(entity => entity.CreatedDate);
-		builder.HasIndex(entity => entity.ModifiedDate);
-
-		Configure(builder);
 	}
 }

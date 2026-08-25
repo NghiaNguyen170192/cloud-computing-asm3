@@ -64,6 +64,7 @@ public class ProcessOutboxMessagesCommandHandlerTest : BaseTest
             Assert.IsNull(failed.ProcessedAtUtc);
             Assert.AreEqual(1, failed.AttemptCount);
             Assert.IsFalse(string.IsNullOrWhiteSpace(failed.LastError));
+            Assert.Contains("InvalidOperationException", failed.LastError, StringComparison.Ordinal);
 
             publisher.ShouldThrow = false;
             var second = await handler.Handle(new ProcessOutboxMessagesCommand(), CancellationToken.None);
