@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using NetCore.Donation.Domain.IRepositories;
 using NetCore.Donation.Domain.Messaging;
 using NetCore.Donation.Domain.SharedKernel;
+using NetCore.Donation.Infrastructure.Database;
 using NetCore.Donation.Infrastructure.Database.AppSettingConfigurations;
 using NetCore.Donation.Infrastructure.Database.Messaging;
 using NetCore.Donation.Infrastructure.Database.Repositories;
@@ -23,6 +24,15 @@ public static class DependencyInjection
 		if (!string.IsNullOrWhiteSpace(aspireApplicationConnectionString))
 		{
 			databaseConfiguration.ApplicationConnectionString = aspireApplicationConnectionString;
+		}
+
+		if (RdsConnection.IsMissing(databaseConfiguration.ApplicationConnectionString))
+		{
+			var rdsConnectionString = RdsConnection.TryFromEnvironment();
+			if (!string.IsNullOrWhiteSpace(rdsConnectionString))
+			{
+				databaseConfiguration.ApplicationConnectionString = rdsConnectionString;
+			}
 		}
 
 		var aspireRedisConnectionString = configuration.GetConnectionString("redis");

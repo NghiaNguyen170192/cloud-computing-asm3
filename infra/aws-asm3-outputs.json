@@ -1,4 +1,4 @@
-{
+﻿{
     "account":  "026652000073",
     "region":  "us-east-1",
     "projectTag":  "aws-asm3",
@@ -18,7 +18,6 @@
     "rdsInstanceId":  "aws-asm3-postgres",
     "glueDatabase":  "aws_asm3_donation",
     "athenaWorkGroup":  "aws-asm3-analytics",
-    "dbPasswordFile":  "C:\\Users\\nghia\\.aws\\aws-asm3-db-password.txt",
     "cloudWatch":  {
                        "postgres":  "/aws/rds/instance/aws-asm3-postgres/postgresql",
                        "donorUi":  "/aws/elasticbeanstalk/aws-asm3-donor-env/var/log/web.stdout.log",

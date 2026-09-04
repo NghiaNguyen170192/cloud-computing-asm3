@@ -507,5 +507,9 @@ DeploymentArtifacts/
 *.env
 .env
 
+# Local RDS password for aws-asm3 (never commit)
+aws-asm3-db-password.txt
+**/.aws/aws-asm3-db-password.txt
+
 # Local Dynamics NFP schema dump (not part of the assignment repo)
 tables_mapping.txt

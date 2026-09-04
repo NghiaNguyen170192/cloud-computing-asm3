@@ -107,12 +107,8 @@ aws rds create-db-parameter-group --db-parameter-group-name "$Prefix-postgres16"
 aws rds modify-db-parameter-group --db-parameter-group-name "$Prefix-postgres16" --parameters "ParameterName=log_connections,ParameterValue=1,ApplyMethod=immediate" "ParameterName=log_disconnections,ParameterValue=1,ApplyMethod=immediate" --region $Region 2>$null | Out-Null
 aws rds modify-db-instance --db-instance-identifier $dbId --db-parameter-group-name "$Prefix-postgres16" --cloudwatch-logs-export-configuration EnableLogTypes=postgresql --apply-immediately --region $Region 2>$null | Out-Null
 
-aws ssm put-parameter --name "/cosc29800/asm3/rds/master-password" --type String --value $dbPass --overwrite --region $Region 2>$null | Out-Null
-if ($LASTEXITCODE -eq 0) {
-  aws ssm add-tags-to-resource --resource-type Parameter --resource-id "/cosc29800/asm3/rds/master-password" --tags "Key=Project,Value=aws-asm3" "Key=Name,Value=aws-asm3-rds-password" --region $Region 2>$null | Out-Null
-} else {
-  Write-Host "SSM put-parameter skipped (password file still at $dbPassPath)"
-}
+# Do not store the RDS password in SSM or repo outputs. Keep it only in
+# %USERPROFILE%\.aws\aws-asm3-db-password.txt (never commit that file).
 
 # --- Lambda placeholder zip ---
 $lambdaDir = Join-Path $env:TEMP "aws-asm3-lambda"
@@ -319,7 +315,6 @@ $out = [ordered]@{
   rdsInstanceId     = $dbId
   glueDatabase      = $glueDb
   athenaWorkGroup   = "$Prefix-analytics"
-  dbPasswordFile    = $dbPassPath
   cloudWatch = @{
     apiLambda     = "/aws/lambda/$Prefix-api"
     apiGateway    = "/aws/apigateway/$Prefix-http-api"

@@ -10,6 +10,7 @@ using NetCore.Donation.Application.Receipt.DTOs;
 using NetCore.Donation.Application.Transaction.DTOs;
 using NetCore.Donation.Api;
 using NetCore.Donation.Domain.SharedKernel;
+using NetCore.Donation.Infrastructure.Database;
 using NetCore.Donation.Infrastructure.Database.Extensions;
 using NetCore.Donation.Infrastructure.Database.Services;
 using NetCore.Donation.Infrastructure.Database.Middleware;
@@ -77,6 +78,13 @@ foreach (var (envKey, configKey) in new (string, string)[]
     {
         builder.Configuration[configKey] = value;
     }
+}
+
+var rdsConnectionString = RdsConnection.TryFromEnvironment();
+if (!string.IsNullOrWhiteSpace(rdsConnectionString) &&
+    RdsConnection.IsMissing(builder.Configuration["Database:ApplicationConnectionString"]))
+{
+    builder.Configuration["Database:ApplicationConnectionString"] = rdsConnectionString;
 }
 
 // Drop MinIO-only settings on Lambda so the SDK uses IAM + regional S3.

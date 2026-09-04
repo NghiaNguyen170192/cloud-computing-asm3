@@ -42,23 +42,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\infra\deploy-aws-asm3.ps1
 RDS password (generated once, reused): `%USERPROFILE%\.aws\aws-asm3-db-password.txt`  
 User: `donationadmin` · DB: `donation` · Port: `5432`
 
+`deploy-aws-asm3.ps1` does not write a PostgreSQL connection string. It sets Lambda `RDS_ENDPOINT` / `RDS_PASSWORD`; the API builds the URI at runtime.
+
+Do **not** put Learner Lab access keys, session tokens, or the RDS password in GitHub Actions secrets. Those credentials expire every lab session and must stay on the machine that runs `deploy-aws-asm3.ps1`.
+
 ```powershell
 aws resource-groups list-group-resources --group-name donation-asm3-rg
 aws resourcegroupstaggingapi get-resources --tag-filters Key=Project,Values=aws-asm3
 ```
-
-## GitHub Actions deploy
-
-Workflow: [`.github/workflows/deploy-aws-asm3.yml`](../.github/workflows/deploy-aws-asm3.yml)
-
-Add repo secrets (refresh when Learner Lab restarts):
-
-| Secret | Source |
-|---|---|
-| `AWS_ACCESS_KEY_ID` | Learner Lab AWS Details |
-| `AWS_SECRET_ACCESS_KEY` | Learner Lab |
-| `AWS_SESSION_TOKEN` | Learner Lab |
-| `AWS_ASM3_DB_PASSWORD` | `%USERPROFILE%\.aws\aws-asm3-db-password.txt` |
 
 ## CloudWatch Logs
 

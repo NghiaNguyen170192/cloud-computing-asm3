@@ -30,8 +30,8 @@ $HttpApiUrl = "https://${apiId}.execute-api.${Region}.amazonaws.com"
 $RdsEndpoint = aws rds describe-db-instances --db-instance-identifier "$Prefix-postgres" --query DBInstances[0].Endpoint.Address --output text --region $Region
 $dbPassPath = Join-Path $env:USERPROFILE ".aws\aws-asm3-db-password.txt"
 if (-not (Test-Path $dbPassPath)) { throw "RDS password file not found: $dbPassPath" }
+# Password stays in the local file. Lambda gets RDS_* parts; the API builds the URI at runtime.
 $dbPass = (Get-Content $dbPassPath -Raw).Trim()
-$cs = "Host=$RdsEndpoint;Port=5432;Database=donation;Username=donationadmin;Password=$dbPass;SSL Mode=Require;Trust Server Certificate=true"
 
 $Work = Join-Path $env:TEMP "aws-asm3-deploy"
 if (Test-Path $Work) { Remove-Item $Work -Recurse -Force }
@@ -68,7 +68,6 @@ $envFile = Join-Path $Work "api-env.json"
 $envObj = @{
   Variables = @{
     ASPNETCORE_ENVIRONMENT = "Production"
-    Database__ApplicationConnectionString = $cs
     Database__Provider = "postgresql"
     Database__MigrationsAssembly = "NetCore.Donation.Infrastructure.Database"
     ObjectStorage__BucketName = $ReceiptsBucket
@@ -78,6 +77,9 @@ $envObj = @{
     Logging__Path = "/tmp/logs"
     RECEIPTS_BUCKET = $ReceiptsBucket
     RDS_ENDPOINT = $RdsEndpoint
+    RDS_USERNAME = "donationadmin"
+    RDS_DATABASE = "donation"
+    RDS_PASSWORD = $dbPass
     PROJECT = "aws-asm3"
     SERVICE_NAME = "aws-asm3-api"
     DISABLE_OUTBOX_PROCESSOR = "true"
@@ -85,14 +87,18 @@ $envObj = @{
   }
 }
 $envObj | ConvertTo-Json -Depth 5 -Compress | Set-Content $envFile -Encoding ascii
-aws lambda update-function-configuration `
-  --function-name $ApiFn `
-  --runtime dotnet10 `
-  --handler NetCore.Donation.Api `
-  --timeout 60 `
-  --memory-size 1024 `
-  --environment "file://$envFile" `
-  --region $Region | Out-Null
+try {
+  aws lambda update-function-configuration `
+    --function-name $ApiFn `
+    --runtime dotnet10 `
+    --handler NetCore.Donation.Api `
+    --timeout 60 `
+    --memory-size 1024 `
+    --environment "file://$envFile" `
+    --region $Region | Out-Null
+} finally {
+  Remove-Item $envFile -Force -ErrorAction SilentlyContinue
+}
 aws lambda wait function-updated --function-name $ApiFn --region $Region
 
 Write-Host "Refreshing outbox worker placeholder..."
