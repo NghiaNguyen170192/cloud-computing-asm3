@@ -30,6 +30,12 @@ foreach ($appName in @("$Prefix-donor-ui", "$Prefix-admin-ui")) {
   aws elasticbeanstalk delete-application --application-name $appName --terminate-env-by-force --region $Region 2>$null | Out-Null
 }
 
+# --- EventBridge outbox schedule ---
+$ruleName = "$Prefix-outbox-schedule"
+Write-Host "Deleting EventBridge rule $ruleName"
+aws events remove-targets --rule $ruleName --ids outbox-worker --region $Region 2>$null | Out-Null
+aws events delete-rule --name $ruleName --region $Region 2>$null | Out-Null
+
 # --- API Gateway ---
 $httpApiName = "$Prefix-http-api"
 $apisJson = aws apigatewayv2 get-apis --output json --region $Region

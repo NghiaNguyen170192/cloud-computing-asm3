@@ -101,13 +101,26 @@ try {
 }
 aws lambda wait function-updated --function-name $ApiFn --region $Region
 
-Write-Host "Refreshing outbox worker placeholder..."
+Write-Host "Refreshing outbox worker..."
 $outboxDir = Join-Path $Work "lambda-outbox"
 New-Item -ItemType Directory -Force -Path $outboxDir | Out-Null
 @'
-import json, os
+import json, os, urllib.error, urllib.request
 def handler(event, context):
-    return {"statusCode": 200, "body": json.dumps({"service": os.environ.get("SERVICE_NAME", "outbox"), "status": "placeholder"})}
+    base = os.environ.get("HTTP_API_URL", "").rstrip("/")
+    if not base:
+        return {"statusCode": 500, "body": json.dumps({"error": "HTTP_API_URL is not set"})}
+    req = urllib.request.Request(
+        base + "/api/v1/outbox-messages/process",
+        data=b"{}",
+        method="POST",
+        headers={"content-type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=50) as resp:
+            return {"statusCode": resp.status, "body": resp.read().decode("utf-8")}
+    except urllib.error.HTTPError as exc:
+        return {"statusCode": exc.code, "body": exc.read().decode("utf-8")}
 '@ | Set-Content (Join-Path $outboxDir "index.py") -Encoding ascii
 $outboxZip = Join-Path $Work "aws-asm3-outbox.zip"
 Zip-Dir $outboxDir $outboxZip
@@ -115,8 +128,14 @@ aws lambda update-function-code --function-name $OutboxFn --zip-file "fileb://$o
 aws lambda wait function-updated --function-name $OutboxFn --region $Region
 aws lambda update-function-configuration `
   --function-name $OutboxFn `
-  --environment "Variables={RECEIPTS_BUCKET=$ReceiptsBucket,RDS_ENDPOINT=$RdsEndpoint,GIT_SHA=$Sha,PROJECT=aws-asm3,SERVICE_NAME=aws-asm3-outbox-worker}" `
+  --timeout 60 `
+  --environment "Variables={HTTP_API_URL=$HttpApiUrl,RECEIPTS_BUCKET=$ReceiptsBucket,RDS_ENDPOINT=$RdsEndpoint,GIT_SHA=$Sha,PROJECT=aws-asm3,SERVICE_NAME=aws-asm3-outbox-worker}" `
   --region $Region | Out-Null
+$OutboxFnArn = aws lambda get-function --function-name $OutboxFn --query Configuration.FunctionArn --output text --region $Region
+$ruleName = "$Prefix-outbox-schedule"
+aws events put-rule --name $ruleName --schedule-expression "rate(1 minute)" --state ENABLED --description "Drain aws-asm3 donation outbox" --region $Region | Out-Null
+aws lambda add-permission --function-name $OutboxFn --statement-id events-outbox --action lambda:InvokeFunction --principal events.amazonaws.com --source-arn "arn:aws:events:${Region}:${Account}:rule/$ruleName" --region $Region 2>$null | Out-Null
+aws events put-targets --rule $ruleName --targets "Id=outbox-worker,Arn=$OutboxFnArn" --region $Region | Out-Null
 
 function Publish-Ui([string]$csproj, [string]$labelPrefix, [string]$app, [string]$envName, [string]$s3Name) {
   Write-Host "Publishing $app..."

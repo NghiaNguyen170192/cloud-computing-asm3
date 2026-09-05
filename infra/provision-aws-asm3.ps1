@@ -195,6 +195,55 @@ aws lambda add-permission `
 
 $HttpApiUrl = "https://${apiId}.execute-api.${Region}.amazonaws.com"
 
+# --- Outbox worker (scheduled drain; request Lambda does not poll) ---
+$outboxDir = Join-Path $env:TEMP "aws-asm3-outbox-worker"
+New-Item -ItemType Directory -Force -Path $outboxDir | Out-Null
+@'
+import json, os, urllib.error, urllib.request
+def handler(event, context):
+    base = os.environ.get("HTTP_API_URL", "").rstrip("/")
+    if not base:
+        return {"statusCode": 500, "body": json.dumps({"error": "HTTP_API_URL is not set"})}
+    req = urllib.request.Request(
+        base + "/api/v1/outbox-messages/process",
+        data=b"{}",
+        method="POST",
+        headers={"content-type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=50) as resp:
+            return {"statusCode": resp.status, "body": resp.read().decode("utf-8")}
+    except urllib.error.HTTPError as exc:
+        return {"statusCode": exc.code, "body": exc.read().decode("utf-8")}
+'@ | Set-Content (Join-Path $outboxDir "index.py") -Encoding ascii
+$outboxZip = Join-Path $env:TEMP "aws-asm3-outbox-worker.zip"
+if (Test-Path $outboxZip) { Remove-Item $outboxZip -Force }
+python -c "import zipfile,pathlib; z=zipfile.ZipFile(r'$outboxZip','w'); p=pathlib.Path(r'$outboxDir')/'index.py'; z.write(p,'index.py'); z.close()"
+aws lambda update-function-code --function-name "$Prefix-outbox-worker" --zip-file "fileb://$outboxZip" --region $Region | Out-Null
+aws lambda wait function-updated --function-name "$Prefix-outbox-worker" --region $Region
+aws lambda update-function-configuration `
+  --function-name "$Prefix-outbox-worker" `
+  --timeout 60 `
+  --environment "Variables={HTTP_API_URL=$HttpApiUrl,RECEIPTS_BUCKET=$ReceiptsBucket,SERVICE_NAME=aws-asm3-outbox-worker,PROJECT=aws-asm3}" `
+  --region $Region | Out-Null
+$OutboxFnArn = aws lambda get-function --function-name "$Prefix-outbox-worker" --query Configuration.FunctionArn --output text --region $Region
+$ruleName = "$Prefix-outbox-schedule"
+aws events put-rule `
+  --name $ruleName `
+  --schedule-expression "rate(1 minute)" `
+  --state ENABLED `
+  --description "Drain aws-asm3 donation outbox" `
+  --region $Region | Out-Null
+aws events tag-resource --resource-arn "arn:aws:events:${Region}:${Account}:rule/$ruleName" --tags "Key=Project,Value=aws-asm3" "Key=Name,Value=$ruleName" "Key=Assignment,Value=COSC29800-A3" --region $Region 2>$null | Out-Null
+aws lambda add-permission `
+  --function-name "$Prefix-outbox-worker" `
+  --statement-id events-outbox `
+  --action lambda:InvokeFunction `
+  --principal events.amazonaws.com `
+  --source-arn "arn:aws:events:${Region}:${Account}:rule/$ruleName" `
+  --region $Region 2>$null | Out-Null
+aws events put-targets --rule $ruleName --targets "Id=outbox-worker,Arn=$OutboxFnArn" --region $Region | Out-Null
+
 $apiLogGroup = "/aws/apigateway/$Prefix-http-api"
 aws logs create-log-group --log-group-name $apiLogGroup --region $Region 2>$null | Out-Null
 aws logs put-retention-policy --log-group-name $apiLogGroup --retention-in-days 7 --region $Region 2>$null | Out-Null

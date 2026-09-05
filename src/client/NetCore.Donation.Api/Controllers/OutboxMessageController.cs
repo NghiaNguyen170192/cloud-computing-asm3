@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OData.Query;
 using NetCore.Donation.Api.OData;
 using NetCore.Donation.Application.Outbox.DTOs;
+using NetCore.Donation.Application.Outbox.Process;
 using NetCore.Donation.Application.Outbox.QueryOutboxMessages;
 using System.Net;
 
@@ -19,5 +20,13 @@ public class OutboxMessageController(IMediator mediator) : AuthorizedBaseControl
     {
         var response = await mediator.Send(new QueryOutboxMessages(correlationId));
         return ODataPageResult.Create(response, options);
+    }
+
+    [HttpPost("process")]
+    [ProducesResponseType((int)HttpStatusCode.OK)]
+    public async Task<IActionResult> ProcessPending(CancellationToken cancellationToken)
+    {
+        var processed = await mediator.Send(new DrainOutboxMessagesCommand(), cancellationToken);
+        return Ok(new { processed });
     }
 }

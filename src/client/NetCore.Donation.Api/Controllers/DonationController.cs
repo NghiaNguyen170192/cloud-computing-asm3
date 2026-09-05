@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using NetCore.Donation.Application.Donation.UserMakesDonation;
+using NetCore.Donation.Application.Outbox.Process;
 using System.Net;
 
 namespace NetCore.Donation.Api.Controllers;
@@ -14,6 +15,7 @@ public class DonationController(IMediator mediator) : AuthorizedBaseController
     public async Task<ActionResult> Create([FromBody] UserMakesDonationCommand request)
     {
         var result = await mediator.Send(request);
+        await mediator.Send(new DrainOutboxMessagesCommand());
 
         if (result.PaymentScheduleId is { } scheduleId)
         {

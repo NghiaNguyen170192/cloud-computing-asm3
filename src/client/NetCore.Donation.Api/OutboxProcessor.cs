@@ -13,7 +13,7 @@ public sealed class OutboxProcessor(IServiceScopeFactory scopeFactory, ILogger<O
             {
                 using var scope = scopeFactory.CreateScope();
                 var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
-                await mediator.Send(new ProcessOutboxMessagesCommand(), stoppingToken);
+                await mediator.Send(new DrainOutboxMessagesCommand(), stoppingToken);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
